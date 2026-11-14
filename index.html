@@ -1,0 +1,946 @@
+
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Даркстор: прибыль, влияние полей и отчёт для ИИ</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --ink:#1d2430; --muted:#667085; --acc:#0b8a4b; --acc2:#0a6b3b; --warn:#b42318; --info:#175cd3; --good:#0b8a4b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-size:16px; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.35; padding:20px 12px 170px; }
+  h1 { font-size:20px; margin:4px 0 6px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; }
+  .weeks { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:10px 0 4px; }
+  .wk { padding:10px 4px; border-radius:10px; border:1px solid var(--line); background:#fff; text-align:center; font-weight:700; font-size:14px; }
+  .wk.done { background:#effaf4; border-color:var(--acc); color:var(--acc2); }
+  .wk.active { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .wk small { display:block; font-weight:400; font-size:11px; opacity:.8; }
+  .q { margin:14px 0; }
+  .q:first-child { margin-top:0; }
+  .q > .label { font-weight:600; margin-bottom:8px; display:block; }
+  .hint { color:var(--muted); font-size:13px; margin-top:4px; }
+  .delta { font-size:13px; margin-top:4px; font-weight:600; }
+  .delta.up { color:var(--warn); }
+  .delta.down { color:var(--acc2); }
+  .delta.flat { color:var(--muted); }
+  .opt { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; background:#fff; }
+  .opt input { width:22px; height:22px; accent-color:var(--acc); flex:0 0 auto; }
+  .opt:has(input:checked) { border-color:var(--acc); background:#effaf4; }
+  .opt:has(input:focus) { box-shadow:0 0 0 3px #0b8a4b22; }
+  .chk { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; }
+  .chk input { width:22px; height:22px; accent-color:var(--acc); }
+  .chk:has(input:checked) { border-color:var(--acc); background:#effaf4; }
+  .chk:has(input:focus) { box-shadow:0 0 0 3px #0b8a4b22; }
+  input[type="text"],input[type="number"],input[type="date"],select,textarea {
+    width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; font-size:16px; background:#fff; color:var(--ink);
+  }
+  input[type="text"]:focus,textarea:focus,select:focus { outline:2px solid #0b8a4b33; }
+  textarea { min-height:84px; resize:vertical; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:420px){ .grid2 { grid-template-columns:1fr; } }
+  .slider-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+  .slider-val { font-weight:700; color:var(--acc2); font-size:18px; min-width:74px; text-align:right; }
+  input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:44px; background:transparent; margin:0; padding:0; }
+  input[type="range"]::-webkit-slider-runnable-track { height:10px; border-radius:6px; background:#e6ecef; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px; border-radius:50%; background:var(--acc); border:4px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.25); margin-top:-12px; }
+  input[type="range"]::-moz-range-track { height:10px; border-radius:6px; background:#e6ecef; }
+  input[type="range"]::-moz-range-thumb { width:30px; height:30px; border:4px solid #fff; border-radius:50%; background:var(--acc); box-shadow:0 2px 8px rgba(0,0,0,.25); }
+  input[type="range"]:focus { outline:2px solid #0b8a4b33; border-radius:8px; }
+  .adaptive { display:none; margin-top:10px; padding:12px; border-left:4px solid var(--warn); background:#fff5f4; border-radius:10px; }
+  .adaptive.on { display:block; }
+  .adaptive .label { color:var(--warn); }
+  .chart-wrap { overflow-x:auto; }
+  svg.chart { width:100%; min-width:320px; height:auto; display:block; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; }
+  .kpi { border:1px solid var(--line); border-radius:12px; padding:10px; background:#fff; }
+  .kpi .name { font-size:12px; color:var(--muted); }
+  .kpi .v { font-size:18px; font-weight:700; margin-top:2px; }
+  .kpi.ok .v { color:var(--acc2); }
+  .kpi.bad .v { color:var(--warn); }
+  /* Водопад причин */
+  .waterfall { margin-top:10px; }
+  .wf-row { display:grid; grid-template-columns: 1fr 90px 90px; gap:8px; align-items:center; padding:8px 10px; border-radius:10px; margin:4px 0; font-size:13px; }
+  .wf-row.head { background:#f3f5f8; font-weight:700; color:var(--muted); font-size:12px; }
+  .wf-row.pos { background:#effaf4; border-left:4px solid var(--good); }
+  .wf-row.neg { background:#fff5f4; border-left:4px solid var(--warn); }
+  .wf-row.neu { background:#f7f8fa; border-left:4px solid var(--line); }
+  .wf-row .bar { height:8px; border-radius:4px; background:#e6ecef; overflow:hidden; }
+  .wf-row .bar > i { display:block; height:100%; }
+  .wf-row.pos .bar > i { background:var(--good); }
+  .wf-row.neg .bar > i { background:var(--warn); }
+  .wf-row .num { text-align:right; font-weight:700; }
+  .wf-row .pct { text-align:right; color:var(--muted); font-size:12px; }
+  .reason { margin:6px 0 14px; padding:10px 12px; border-radius:10px; background:#fff; border:1px dashed var(--line); }
+  .reason .t { font-weight:700; font-size:13px; margin-bottom:4px; }
+  .reason .sol { font-size:13px; color:var(--ink); }
+  .reason .sol b { color:var(--acc2); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; margin-left:6px; }
+  .badge.neg { background:#fee4e2; color:var(--warn); }
+  .badge.pos { background:#dcfae6; color:var(--good); }
+  #result { min-height:260px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
+  #aiReport { min-height:320px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
+  .sticky { position:fixed; left:0; right:0; bottom:0; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(246,247,249,.96); backdrop-filter:blur(8px); border-top:1px solid var(--line); display:flex; gap:8px; z-index:100; }
+  .sticky button { flex:1; height:52px; border:0; border-radius:14px; font-size:14px; font-weight:700; color:#fff; background:var(--acc); }
+  .sticky button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line); flex:0 0 24%; }
+  .sticky button.ai { background:#175cd3; flex:0 0 30%; }
+  .sticky button:active { transform:translateY(1px); }
+
+  /* YouTube-полоса сверху */
+  #ytWrap { position:fixed; top:0; left:0; right:0; height:4px; background:#e6ecef; z-index:9999; }
+  #ytBar { height:100%; width:0%; background:#b42318; transition: width .35s cubic-bezier(.4,0,.2,1), background .35s; position:relative; }
+  #ytBar::after { content:''; position:absolute; right:-2px; top:-3px; width:14px; height:10px; border-radius:50%; background:inherit; filter:blur(3px); opacity:.9; transition: opacity .3s; }
+  #ytBar.warn { background:#f79009; }
+  #ytBar.good { background:#0b8a4b; }
+
+  /* Живая легенда */
+  #liveLegend { position:sticky; top:8px; z-index:50; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:10px 0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+  #liveLegend .row1 { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #liveLegend .status { font-weight:700; }
+  #liveLegend .status.low { color:var(--warn); }
+  #liveLegend .status.mid { color:#b54708; }
+  #liveLegend .status.high { color:var(--acc2); }
+  #liveLegend .score { font-weight:700; color:var(--ink); }
+  #liveLegend .contrib { margin-top:8px; display:grid; gap:4px; }
+  #liveLegend .c { display:grid; grid-template-columns: 1fr 44px 80px; gap:8px; align-items:center; font-size:12px; }
+  #liveLegend .c .b { height:6px; border-radius:3px; background:#eef1f4; overflow:hidden; }
+  #liveLegend .c .b > i { display:block; height:100%; background:var(--acc); }
+  #liveLegend .c.neg .b > i { background:var(--warn); }
+  #liveLegend .c .v { text-align:right; color:var(--muted); }
+  #liveLegend .c .nm { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Подсветка поля, которое меняет маржу */
+  .q.flash { animation: flashField 1s ease; }
+  @keyframes flashField { 0% { box-shadow:0 0 0 0 rgba(11,138,75,0); } 30% { box-shadow:0 0 0 6px rgba(11,138,75,.25); } 100% { box-shadow:0 0 0 0 rgba(11,138,75,0); } }
+</style>
+</head>
+<body>
+
+<div id="ytWrap"><div id="ytBar"></div></div>
+
+<h1>Даркстор: прибыль и влияние полей</h1>
+<div class="sub">Маржа и веса потерь калибруются на неделе 1. Полоса сверху показывает качество данных и прибыль. Легенда объясняет вклад полей.</div>
+
+<div id="liveLegend">
+  <div class="row1">
+    <span class="status low" id="liveStatus">Оценка: недостаточно данных</span>
+    <span class="score" id="liveScore">0 / 100</span>
+  </div>
+  <div class="contrib" id="liveContrib"></div>
+</div>
+
+<div class="card">
+  <div class="weeks" id="weeks"></div>
+  <div class="hint" id="weekHint"></div>
+</div>
+
+<form id="survey">
+  <div id="questions"></div>
+  <div class="card">
+    <h2>Промежуточные графики</h2>
+    <div class="chart-wrap" id="charts"></div>
+  </div>
+  <div class="card">
+    <h2>Сводка результата</h2>
+    <div class="hint" style="margin-bottom:8px;">Обновляется автоматически. Тап по полю — копирование.</div>
+    <textarea id="result" readonly></textarea>
+  </div>
+  <div class="card">
+    <h2>Отчёт для анализа ИИ</h2>
+    <div class="hint" style="margin-bottom:8px;">Структурированный текст: цель, калибровка, метрики, причины изменения маржи, решения, риски. Кнопка «Отчёт ИИ» копирует его.</div>
+    <textarea id="aiReport" readonly></textarea>
+  </div>
+</form>
+
+<div class="sticky">
+  <button type="button" class="secondary" id="resetBtn">Сброс</button>
+  <button type="button" class="secondary" id="prevBtn">←</button>
+  <button type="button" id="nextBtn">Далее →</button>
+  <button type="button" class="ai" id="copyAiBtn">Отчёт ИИ</button>
+</div>
+
+<script>
+(function () {
+  var KEY = 'darkstore_profit_live_v4';
+  var TOTAL_WEEKS = 6;
+  var currentWeek = 1;
+  var state = { weeks: {}, currentWeek: 1 };
+
+  var form = document.getElementById('survey');
+  var questionsEl = document.getElementById('questions');
+  var resultEl = document.getElementById('result');
+  var aiReportEl = document.getElementById('aiReport');
+  var weeksEl = document.getElementById('weeks');
+  var weekHint = document.getElementById('weekHint');
+  var chartsEl = document.getElementById('charts');
+
+  // ---------- веса полей ----------
+  var FIELD_WEIGHTS = {
+    dsName:1, curatorName:1, date:1, blocker:2, slots:2, gray:2, done:2,
+    tmcMissing:2, lateCauses:2, appealCauses:2, curatorNeeds:2,
+    zonesCount:3, ordersPerZoneDay:3, marginPct:4, courierCost:4,
+    kL:3, kA:3, kT:3, kE:3, curatorThreshold:3, curatorPenaltyPct:3,
+    lateness:4, appeals:4, tmc:4, exits:4, cost:3,
+    curatorProcess:3, curatorAutonomy:3, curatorKpi:3,
+    zoneOrders:3, zoneCouriers:3, avgKm:2, tripTime:2, ordersPerCourier:2,
+    zonePlan:2, courierPlan:2, tmcPlan:2, curatorComment:2,
+    zonesLaunched:2, slotsLaunched:2, ratesUpdated:2, graySolved:2,
+    tmc2:3, lateness2:4, appeals2:4, exits2:3, zoneOrders2:3, zoneCouriers2:3,
+    courierTurnkey:2, telegramGroups:2,
+    lateness3:4, appeals3:4, exits3:3, tmc3:4, cost3:3,
+    lateness4:4, appeals4:4, exits4:3, tmc4:4, cost4:3,
+    lateWhy3:2, lateWhy4:2, appealWhy3:2, appealWhy4:2,
+    curatorAutonomy5:3, curatorKpi5:3, tmc5:4, lateness5:4, appeals5:4,
+    courierForecast:2, stabilityPlan:2,
+    lateness6:4, appeals6:4, tmc6:4, curatorAutonomy6:3, curatorKpi6:3, exits6:3,
+    autonomous:2, finalPlan:2
+  };
+
+  function fieldMax(id) {
+    if (id === 'marginPct') return 60;
+    if (id === 'courierCost') return 500;
+    if (id === 'kL' || id === 'kA' || id === 'kT' || id === 'kE') return 5;
+    if (id === 'curatorThreshold') return 100;
+    if (id === 'curatorPenaltyPct') return 30;
+    if (id === 'zonesCount') return 30;
+    if (id === 'ordersPerZoneDay') return 400;
+    if (id.indexOf('lateness') === 0) return 30;
+    if (id.indexOf('appeals') === 0) return 30;
+    if (id.indexOf('tmc') === 0) return 100;
+    if (id.indexOf('exits') === 0) return 100;
+    if (id.indexOf('curator') === 0) return 100;
+    if (id.indexOf('zoneOrders') === 0) return 300;
+    if (id.indexOf('zoneCouriers') === 0) return 10;
+    if (id === 'cost' || id.indexOf('cost') === 0) return 500;
+    if (id === 'avgKm') return 20;
+    if (id === 'tripTime') return 120;
+    if (id === 'ordersPerCourier') return 30;
+    return 1;
+  }
+  function fieldValueNorm(id, raw) {
+    if (raw == null || raw === '') return 0;
+    if (Array.isArray(raw)) return raw.length ? 1 : 0;
+    if (typeof raw === 'string') {
+      if (raw === 'да') return 1;
+      if (raw === 'частично') return 0.6;
+      if (raw === 'нет') return 0.2;
+      return Math.min(1, raw.length / 20);
+    }
+    var v = parseFloat(raw) || 0;
+    var max = fieldMax(id);
+    if (id.indexOf('lateness') === 0 || id.indexOf('appeals') === 0) return Math.max(0, 1 - v / max);
+    return Math.min(1, v / max);
+  }
+
+  // ---------- сохранение ----------
+  function save() { state.currentWeek = currentWeek; localStorage.setItem(KEY, JSON.stringify(state)); }
+  function load() {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return;
+    try { var d = JSON.parse(raw); state.weeks = d.weeks || {}; currentWeek = d.currentWeek || 1; } catch (e) {}
+  }
+  function weekData(w) { return state.weeks[String(w)] || {}; }
+  function setAnswer(id, value) {
+    var w = String(currentWeek);
+    if (!state.weeks[w]) state.weeks[w] = {};
+    state.weeks[w][id] = value;
+  }
+  function getAnswer(id) { return weekData(currentWeek)[id]; }
+  function prevAnswer(id, w) {
+    for (var i = w - 1; i >= 1; i--) {
+      var d = weekData(i);
+      if (d[id] !== undefined && d[id] !== '') return d[id];
+    }
+    return undefined;
+  }
+  function num(v) { return parseFloat(v) || 0; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function rub(v) { return Math.round(v).toLocaleString('ru-RU') + ' ₽'; }
+
+  // ---------- калибровка ----------
+  function calibration() {
+    var d = weekData(1);
+    return {
+      zonesCount: num(d.zonesCount) || 6,
+      ordersPerZoneDay: num(d.ordersPerZoneDay) || 220,
+      marginPct: d.marginPct !== undefined ? num(d.marginPct) : 25,
+      courierCost: num(d.courierCost) || num(d.cost) || 150,
+      kL: d.kL !== undefined ? num(d.kL) : 0.5,
+      kA: d.kA !== undefined ? num(d.kA) : 0.7,
+      kT: d.kT !== undefined ? num(d.kT) : 1.0,
+      kE: d.kE !== undefined ? num(d.kE) : 0.3,
+      curatorThreshold: d.curatorThreshold !== undefined ? num(d.curatorThreshold) : 90,
+      curatorPenaltyPct: d.curatorPenaltyPct !== undefined ? num(d.curatorPenaltyPct) : 5
+    };
+  }
+
+  // ---------- прибыль ----------
+  function calcProfitDetail(d, cal) {
+    cal = cal || calibration();
+    var zones = num(d.zonesCount) || cal.zonesCount;
+    var perZoneDay = num(d.ordersPerZoneDay) || cal.ordersPerZoneDay;
+    var Q = zones * perZoneDay;
+    var cost = num(d.courierCost) || num(d.cost) || cal.courierCost;
+    var marginPct = d.marginPct !== undefined ? num(d.marginPct) : cal.marginPct;
+    var M = cost * marginPct / 100;
+    var revenue = Q * M;
+    var courierPay = Q * cost;
+    var lateness = d.lateness != null ? num(d.lateness) : 0;
+    var appeals = d.appeals != null ? num(d.appeals) : 0;
+    var tmc = d.tmc != null ? num(d.tmc) : 100;
+    var exits = d.exits != null ? num(d.exits) : 95;
+    var lossLate = revenue * (cal.kL / 100) * lateness;
+    var lossApp = revenue * (cal.kA / 100) * appeals;
+    var lossTmc = revenue * (cal.kT / 100) * (100 - tmc);
+    var lossExits = revenue * (cal.kE / 100) * (100 - exits);
+    var loss = lossLate + lossApp + lossTmc + lossExits;
+    var cmin = Math.min(num(d.curatorProcess) || 90, num(d.curatorAutonomy) || 90, num(d.curatorKpi) || 90);
+    var curatorPenalty = cmin < cal.curatorThreshold ? cal.curatorPenaltyPct / 100 : 0;
+    var profitBefore = revenue - courierPay - loss;
+    var profit = profitBefore * (1 - curatorPenalty);
+    return { Q:Q, cost:cost, marginPct:marginPct, M:M, revenue:revenue, courierPay:courierPay,
+      lateness:lateness, appeals:appeals, tmc:tmc, exits:exits,
+      lossLate:lossLate, lossApp:lossApp, lossTmc:lossTmc, lossExits:lossExits, loss:loss,
+      curatorMin:cmin, curatorPenalty:curatorPenalty,
+      profitBefore:Math.round(profitBefore), profit:Math.round(profit) };
+  }
+  function mergedForWeek(w) {
+    var d = weekData(w);
+    if (!d || Object.keys(d).length === 0) return null;
+    var base = weekData(1);
+    var merged = Object.assign({}, base, d);
+    ['lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi'].forEach(function (k) {
+      var key = k + (w === 1 ? '' : w);
+      if (d[key] != null) merged[k] = d[key];
+      else if (d[k] != null) merged[k] = d[k];
+    });
+    return merged;
+  }
+  function profitForWeek(w) {
+    var m = mergedForWeek(w);
+    return m ? calcProfitDetail(m) : null;
+  }
+
+  // ---------- оценка качества и прибыли ----------
+  function calcQualityScore() {
+    var totalW = 0, sum = 0, contribs = [];
+    var d = weekData(currentWeek);
+    Object.keys(d).forEach(function (id) {
+      var w = FIELD_WEIGHTS[id] || 1;
+      var norm = fieldValueNorm(id, d[id]);
+      totalW += w;
+      sum += norm * w;
+      contribs.push({ id:id, w:w, norm:norm, value:d[id] });
+    });
+    var fill = totalW ? (sum / totalW) * 100 : 0;
+    var p = profitForWeek(currentWeek);
+    var profitScore = 0;
+    if (p) {
+      var p1 = profitForWeek(1);
+      if (p1 && p1.profit) profitScore = Math.max(0, Math.min(100, (p.profit / Math.max(1, p1.profit)) * 100));
+      else profitScore = 50;
+    }
+    var score = Math.round(fill * 0.4 + profitScore * 0.6);
+    contribs.sort(function (a, b) { return (b.norm * b.w) - (a.norm * a.w); });
+    return { score:score, fill:Math.round(fill), profitScore:Math.round(profitScore), contribs:contribs.slice(0,5) };
+  }
+  function updateLiveBar() {
+    var r = calcQualityScore();
+    var bar = document.getElementById('ytBar');
+    var scoreEl = document.getElementById('liveScore');
+    var statusEl = document.getElementById('liveStatus');
+    var contribEl = document.getElementById('liveContrib');
+    if (!bar) return;
+    bar.style.width = r.score + '%';
+    bar.className = r.score >= 70 ? 'good' : (r.score >= 40 ? 'warn' : '');
+    scoreEl.textContent = r.score + ' / 100';
+    statusEl.className = 'status ' + (r.score >= 70 ? 'high' : (r.score >= 40 ? 'mid' : 'low'));
+    statusEl.textContent = r.score >= 70 ? 'Оценка: данные качественные, прибыль растёт' :
+      (r.score >= 40 ? 'Оценка: средние данные, есть риски' : 'Оценка: недостаточно данных');
+    var html = '';
+    r.contribs.forEach(function (c) {
+      var pct = Math.round(c.norm * 100);
+      var neg = (c.id.indexOf('lateness') === 0 || c.id.indexOf('appeals') === 0) ? (c.norm < 0.8) : (c.norm < 0.5);
+      html += '<div class="c ' + (neg?'neg':'') + '"><span class="nm">' + esc(c.id) + ' (вес ' + c.w + ')</span><span class="b"><i style="width:' + pct + '%"></i></span><span class="v">' + pct + '%</span></div>';
+    });
+    contribEl.innerHTML = html || '<div class="v">Заполните поля, чтобы увидеть вклад</div>';
+  }
+
+  // ---------- причины и решения ----------
+  function buildReasons(p, cal, prev) {
+    var reasons = [];
+    var revenue = p.revenue || 1;
+    function add(key, title, value, pct, isNeg, solution) {
+      reasons.push({ key:key, title:title, value:value, pct:pct, isNeg:isNeg, solution:solution });
+    }
+    if (p.lateness > 7) add('lateness', 'Опоздания ' + p.lateness + '%', p.lossLate, p.lossLate/revenue*100, true,
+      'Снизить до 5–7%: пересмотреть слоты на проблемных Зисах, добавить буфер 10–15 мин в тариф, разобрать причины по курьерам.');
+    else if (p.lateness > 5) add('lateness', 'Опоздания ' + p.lateness + '% (в норме, но выше цели 5%)', p.lossLate, p.lossLate/revenue*100, true,
+      'Держать 5–7%: контроль слотов, точечные беседы с курьерами с опозданием >15 мин.');
+    else add('lateness', 'Опоздания ' + p.lateness + '% (в цели)', p.lossLate, p.lossLate/revenue*100, false,
+      'Поддерживать: премия за стабильность, публичная метрика по Зисам.');
+    if (p.appeals > 5) add('appeals', 'Обращения ' + p.appeals + '%', p.lossApp, p.lossApp/revenue*100, true,
+      'Снизить до 0–5%: разбор топ-причин, SLA ответа куратора, обучение курьеров коммуникации, контроль ТМЦ.');
+    else add('appeals', 'Обращения ' + p.appeals + '% (в цели)', p.lossApp, p.lossApp/revenue*100, false,
+      'Поддерживать: еженедельный разбор обращений, обратная связь курьерам.');
+    if (p.tmc < 100) add('tmc', 'ТМЦ ' + p.tmc + '%', p.lossTmc, p.lossTmc/revenue*100, true,
+      'Закрыть 100%: чек-лист выдачи, ответственный куратор, срок 48 часов, резерв на складе.');
+    else add('tmc', 'ТМЦ 100%', 0, 0, false, 'Поддерживать: инвентаризация раз в неделю, резерв 5%.');
+    if (p.exits < 95) add('exits', 'Выход по слотам ' + p.exits + '%', p.lossExits, p.lossExits/revenue*100, true,
+      'Поднять до 95%+: подтверждение слотов за 12 часов, замена в течение 2 часов, мотивация за выход.');
+    else add('exits', 'Выход по слотам ' + p.exits + '%', p.lossExits, p.lossExits/revenue*100, false,
+      'Поддерживать: напоминания, бонус за полную смену.');
+    if (p.curatorPenalty > 0) add('curator', 'Куратор ' + p.curatorMin + '% (<' + cal.curatorThreshold + '%)', p.profitBefore * p.curatorPenalty, p.profitBefore*p.curatorPenalty/revenue*100, true,
+      'Довести до ≥' + cal.curatorThreshold + '%: наставник, чек-лист процессов, тест, перевод на KPI после сдачи.');
+    if (p.marginPct < 20) add('margin', 'Маржа ' + p.marginPct + '% (низкая)', 0, 0, true,
+      'Пересмотреть маржу: проверить стоимость заказа, комиссию, тариф курьера. Цель — не ниже 20–25%.');
+    else if (p.marginPct > 35) add('margin', 'Маржа ' + p.marginPct + '% (высокая)', 0, 0, false,
+      'Проверить, не страдает ли скорость и качество. Высокая маржа допустима при стабильных метриках.');
+    if (prev) {
+      var dProfit = p.profit - prev.profit;
+      if (dProfit < 0) add('delta', 'Прибыль упала на ' + rub(Math.abs(dProfit)), Math.abs(dProfit), Math.abs(dProfit)/revenue*100, true,
+        'Разобрать топ-причину падения (опоздания/обращения/ТМЦ/выходы), зафиксировать план на неделю.');
+      else if (dProfit > 0) add('delta', 'Прибыль выросла на ' + rub(dProfit), dProfit, dProfit/revenue*100, false,
+        'Закрепить: какие действия дали эффект, масштабировать на другие Зисы.');
+    }
+    return reasons;
+  }
+  function renderWaterfall(p, prev) {
+    var revenue = p.revenue || 1;
+    function row(label, value, cls) {
+      var pct = Math.abs(value) / revenue * 100;
+      var width = Math.min(100, pct * 6);
+      var sign = value >= 0 ? '+' : '−';
+      return '<div class="wf-row ' + cls + '"><div><div>' + esc(label) + '</div><div class="bar"><i style="width:' + width.toFixed(1) + '%"></i></div></div><div class="num">' + sign + rub(Math.abs(value)) + '</div><div class="pct">' + pct.toFixed(2) + '%</div></div>';
+    }
+    var h = '<div class="waterfall">';
+    h += '<div class="wf-row head"><div>Причина</div><div class="num">₽/день</div><div class="pct">% выручки</div></div>';
+    h += row('Выручка (маржа)', p.revenue, 'neu');
+    h += row('Оплата курьерам', -p.courierPay, 'neg');
+    h += row('Потери: опоздания', -p.lossLate, p.lossLate > 0 ? 'neg' : 'pos');
+    h += row('Потери: обращения', -p.lossApp, p.lossApp > 0 ? 'neg' : 'pos');
+    h += row('Потери: ТМЦ', -p.lossTmc, p.lossTmc > 0 ? 'neg' : 'pos');
+    h += row('Потери: выходы', -p.lossExits, p.lossExits > 0 ? 'neg' : 'pos');
+    if (p.curatorPenalty > 0) h += row('Штраф куратора ' + Math.round(p.curatorPenalty*100) + '%', -(p.profitBefore * p.curatorPenalty), 'neg');
+    h += row('Прибыль в день', p.profit, 'pos');
+    h += '</div>';
+    if (prev) {
+      var d = p.profit - prev.profit;
+      var cls = d > 0 ? 'down' : (d < 0 ? 'up' : 'flat');
+      var arrow = d > 0 ? '▲' : (d < 0 ? '▼' : '■');
+      h += '<div class="delta ' + cls + '" style="margin-top:8px;">К прошлой неделе: ' + arrow + ' ' + rub(Math.abs(d)) + ' (' + (d >= 0 ? '+' : '') + (prev.profit ? (d/prev.profit*100).toFixed(1) : '0') + '%)</div>';
+    }
+    return h;
+  }
+  function renderReasons(reasons) {
+    var h = '<div style="margin-top:10px;"><div style="font-weight:700;font-size:13px;margin-bottom:6px;">Причины и решения</div>';
+    reasons.forEach(function (r) {
+      var badge = r.isNeg ? '<span class="badge neg">ухудшает</span>' : '<span class="badge pos">норма</span>';
+      h += '<div class="reason"><div class="t">' + esc(r.title) + ' ' + badge + (r.value ? ' — ' + rub(Math.abs(r.value)) + ' (' + r.pct.toFixed(2) + '% выручки)' : '') + '</div><div class="sol"><b>Решение:</b> ' + esc(r.solution) + '</div></div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  // ---------- шапка недель ----------
+  function renderWeeks() {
+    var html = '';
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var cls = 'wk';
+      if (w === currentWeek) cls += ' active';
+      else if (state.weeks[String(w)]) cls += ' done';
+      html += '<div class="' + cls + '" data-week="' + w + '">' + w + '<small>' + (state.weeks[String(w)] ? 'заполнена' : 'неделя') + '</small></div>';
+    }
+    weeksEl.innerHTML = html;
+    weeksEl.querySelectorAll('.wk').forEach(function (el) {
+      el.addEventListener('click', function () {
+        currentWeek = parseInt(el.getAttribute('data-week'), 10);
+        save(); render();
+      });
+    });
+    var labels = {
+      1:'Диагностика, калибровка модели, метрики.',
+      2:'Запуск Зисов и слотов, новые ставки, закрытие открытых пунктов.',
+      3:'Курьер под ключ, Telegram-группы, динамика метрик.',
+      4:'Стабилизация слотов и тарифов, работа с отклонениями.',
+      5:'Автономность куратора 70–80%, ТМЦ 100%.',
+      6:'Целевые KPI: опоздания 5–7%, обращения 0–5%, ТМЦ 100%, куратор ≥90%.'
+    };
+    weekHint.textContent = 'Неделя ' + currentWeek + ': ' + labels[currentWeek];
+  }
+
+  // ---------- конструкторы ----------
+  function weightAttr(id) { return ' data-weight="' + (FIELD_WEIGHTS[id] || 1) + '"'; }
+  function fieldText(id, label, placeholder) {
+    var v = getAnswer(id) != null ? getAnswer(id) : (prevAnswer(id, currentWeek) || '');
+    return '<div class="q"><span class="label">' + esc(label) + '</span><input type="text" data-id="' + id + '"' + weightAttr(id) + ' value="' + esc(v) + '" placeholder="' + esc(placeholder||'') + '"></div>';
+  }
+  function fieldRadio(id, label, options) {
+    var v = getAnswer(id) != null ? getAnswer(id) : (prevAnswer(id, currentWeek) || '');
+    var h = '<div class="q"><span class="label">' + esc(label) + '</span>';
+    options.forEach(function (o) {
+      h += '<label class="opt"><input type="radio" name="' + id + '" data-id="' + id + '"' + weightAttr(id) + ' value="' + esc(o) + '"' + (v===o?' checked':'') + '> ' + esc(o) + '</label>';
+    });
+    h += '<input type="text" data-id="' + id + '_other" placeholder="Свой вариант" style="margin-top:6px;' + (v==='другое'?'':'display:none;') + '"></div>';
+    return h;
+  }
+  function fieldChecks(id, label, options) {
+    var v = getAnswer(id); if (!Array.isArray(v)) v = [];
+    var h = '<div class="q"><span class="label">' + esc(label) + '</span>';
+    options.forEach(function (o) {
+      h += '<label class="chk"><input type="checkbox" data-group="' + id + '" value="' + esc(o) + '"' + (v.indexOf(o)!==-1?' checked':'') + '> ' + esc(o) + '</label>';
+    });
+    h += '<input type="text" data-id="' + id + '_other" placeholder="Свой вариант" style="margin-top:6px;' + (v.indexOf('другое')!==-1?'':'display:none;') + '"></div>';
+    return h;
+  }
+  function fieldSlider(id, label, min, max, step, value, hint) {
+    var v = getAnswer(id) != null ? getAnswer(id) : (prevAnswer(id, currentWeek) != null ? prevAnswer(id, currentWeek) : value);
+    return '<div class="q" data-q="' + id + '"><div class="slider-head"><span class="label">' + esc(label) + '</span><span class="slider-val" id="' + id + 'Val">' + esc(v) + '</span></div>' +
+      '<input type="range" data-id="' + id + '"' + weightAttr(id) + ' min="' + min + '" max="' + max + '" step="' + step + '" value="' + esc(v) + '">' +
+      (hint?'<div class="hint">' + esc(hint) + '</div>':'') +
+      '<div class="delta" data-delta="' + id + '"></div></div>';
+  }
+  function fieldArea(id, label, placeholder) {
+    var v = getAnswer(id) != null ? getAnswer(id) : '';
+    return '<div class="q"><span class="label">' + esc(label) + '</span><textarea data-id="' + id + '"' + weightAttr(id) + ' placeholder="' + esc(placeholder||'') + '">' + esc(v) + '</textarea></div>';
+  }
+  function adaptive(id, label, content) {
+    return '<div class="adaptive" id="' + id + '"><span class="label">' + esc(label) + '</span>' + content + '</div>';
+  }
+
+  function renderDeltas() {
+    document.querySelectorAll('[data-delta]').forEach(function (el) {
+      var id = el.getAttribute('data-delta');
+      var cur = getAnswer(id); var prev = prevAnswer(id, currentWeek);
+      el.className = 'delta';
+      if (cur == null || prev == null) { el.textContent = ''; return; }
+      var d = num(cur) - num(prev);
+      var arrow = d > 0 ? '▲' : (d < 0 ? '▼' : '■');
+      var cls = d > 0 ? 'up' : (d < 0 ? 'down' : 'flat');
+      el.classList.add(cls);
+      el.textContent = 'К неделе ' + (currentWeek - 1) + ': ' + arrow + ' ' + Math.abs(d).toFixed(1) + ' (было ' + prev + ')';
+    });
+  }
+
+  // ---------- вопросы ----------
+  function renderQuestions() {
+    var w = currentWeek;
+    var w1 = weekData(1);
+    var wPrev = weekData(w - 1);
+    var h = '';
+
+    if (w === 1) {
+      h += '<div class="card"><h2>Неделя 1. Диагностика</h2>';
+      h += fieldText('dsName', 'Даркстор', 'Название / ID');
+      h += fieldText('curatorName', 'Куратор', 'ФИО');
+      h += fieldText('date', 'Дата', '');
+      h += fieldChecks('done', 'Что уже сделано', ['диагностика ДС','интервью с курьерами','поиск серых/левых аккаунтов','аудит ТМЦ','снятие метрик по Зисам','деление на Зисы','запуск слотов','новые ставки','Telegram-группы']);
+      h += fieldRadio('blocker', 'Что мешает больше всего', ['опоздания','обращения','ТМЦ','слоты','тарифы','куратор','другое']);
+      h += fieldChecks('slots', 'Какие слоты используются', ['8–20','7–19','10 часов','12 часов','другое']);
+      h += fieldRadio('gray', 'Серые/левые аккаунты', ['нет','есть, единичные','есть, системно','не проверяли','другое']);
+      h += fieldChecks('tmcMissing', 'Чего не хватает из ТМЦ', ['сумка','терминал','форма','зарядка','нет, всё есть','другое']);
+      h += fieldChecks('lateCauses', 'Причины опозданий', ['пробки','сложная зона','слот','ТМЦ','куратор','другое']);
+      h += fieldChecks('appealCauses', 'Причины обращений', ['опоздания','ТМЦ','связь','куратор','другое']);
+      h += fieldChecks('curatorNeeds', 'Что нужно куратору', ['процессы','аналитика','KPI','коммуникация','другое']);
+      h += '</div>';
+
+      h += '<div class="card"><h2>Неделя 1. Калибровка модели прибыли</h2>';
+      h += '<div class="hint" style="margin-bottom:8px;">Эти параметры используются во всех расчётах. Меняйте под фактические данные даркстора.</div>';
+      h += fieldSlider('zonesCount', 'Количество Зисов', 1, 30, 1, 6, '');
+      h += fieldSlider('ordersPerZoneDay', 'Заказов в день на Зис', 50, 400, 5, 220, '');
+      h += fieldSlider('marginPct', 'Маржа с заказа, %', 5, 60, 1, 25, 'Доля маржи в стоимости заказа');
+      h += fieldSlider('courierCost', 'Стоимость заказа курьеру, руб.', 0, 500, 5, 150, 'Тариф за заказ');
+      h += fieldSlider('kL', 'Вес потерь от опозданий, % маржи на 1% опозданий', 0, 5, 0.1, 0.5, '');
+      h += fieldSlider('kA', 'Вес потерь от обращений, % маржи на 1% обращений', 0, 5, 0.1, 0.7, '');
+      h += fieldSlider('kT', 'Вес потерь от отсутствия ТМЦ, % маржи на 1% дефицита', 0, 5, 0.1, 1.0, '');
+      h += fieldSlider('kE', 'Вес потерь от недобора выходов, % маржи на 1%', 0, 5, 0.1, 0.3, '');
+      h += fieldSlider('curatorThreshold', 'Порог готовности куратора, %', 50, 100, 1, 90, 'Ниже порога — штраф к прибыли');
+      h += fieldSlider('curatorPenaltyPct', 'Штраф за куратора ниже порога, %', 0, 30, 1, 5, '');
+      h += '</div>';
+
+      h += '<div class="card"><h2>Неделя 1. Зисы и метрики</h2>';
+      h += fieldSlider('zoneOrders', 'Заказов на один Зис', 180, 300, 1, 250, 'Цель 180–250');
+      h += fieldSlider('zoneCouriers', 'Курьеров на один Зис', 1, 10, 1, 5, 'Максимум 5');
+      h += fieldSlider('avgKm', 'Средний километраж ходки, км', 0, 20, 0.5, 5, '');
+      h += fieldSlider('tripTime', 'Среднее время ходки, мин', 10, 120, 5, 40, '');
+      h += fieldSlider('ordersPerCourier', 'Заказов на курьера за слот', 1, 30, 1, 12, '');
+      h += fieldSlider('lateness', 'Опоздания на заказ, %', 0, 30, 0.5, 7, 'Цель 5–7%');
+      h += fieldSlider('appeals', 'Обращения, %', 0, 30, 0.5, 5, 'Цель 0–5%');
+      h += fieldSlider('exits', 'Выход по слотам, %', 0, 100, 1, 95, '');
+      h += fieldSlider('cost', 'Стоимость заказа, руб.', 0, 500, 5, 150, '');
+      h += fieldSlider('tmc', 'Обеспеченность ТМЦ, %', 0, 100, 1, 100, 'Цель 100%');
+      h += fieldSlider('curatorProcess', 'Понимание процессов куратором, %', 0, 100, 1, 90, '');
+      h += fieldSlider('curatorAutonomy', 'Автономность куратора, %', 0, 100, 1, 90, '');
+      h += fieldSlider('curatorKpi', 'Готовность куратора к KPI, %', 0, 100, 1, 90, 'Цель к неделе 6: ≥90%');
+      h += adaptive('followZone', 'Зис больше 250. План деления', fieldArea('zonePlan', '', 'Какой Зис делим и как'));
+      h += adaptive('followCouriers', 'В Зисе больше 5 курьеров. План', fieldArea('courierPlan', '', 'Кого и куда переносим'));
+      h += adaptive('followTmc', 'ТМЦ не 100%. План', fieldArea('tmcPlan', '', 'Позиции, ответственный, срок'));
+      h += adaptive('followCurator', 'Куратор ниже порога. План', fieldArea('curatorComment', '', 'Что подтягиваем и когда'));
+      h += '</div>';
+    }
+
+    if (w === 2) {
+      h += '<div class="card"><h2>Неделя 2. Запуск Зисов и слотов</h2>';
+      h += fieldRadio('zonesLaunched', 'Зисы перезапущены по новым границам', ['да','нет','частично','другое']);
+      h += fieldRadio('slotsLaunched', 'Слоты запущены', ['да','нет','частично','другое']);
+      h += fieldRadio('ratesUpdated', 'Новые ставки по Зисам введены', ['да','нет','частично','другое']);
+      h += fieldSlider('zoneOrders2', 'Заказов на Зис после запуска', 180, 300, 1, num(w1.zoneOrders)||250, 'Цель 180–250');
+      h += fieldSlider('zoneCouriers2', 'Курьеров на Зис после запуска', 1, 10, 1, num(w1.zoneCouriers)||5, 'Максимум 5');
+      h += fieldSlider('lateness2', 'Опоздания на заказ, %', 0, 30, 0.5, num(w1.lateness)||7, 'Цель 5–7%');
+      h += fieldSlider('appeals2', 'Обращения, %', 0, 30, 0.5, num(w1.appeals)||5, 'Цель 0–5%');
+      h += fieldSlider('exits2', 'Выход по слотам, %', 0, 100, 1, num(w1.exits)||95, '');
+      if (w1.gray && w1.gray.indexOf('есть') !== -1) h += fieldRadio('graySolved', 'Серые/левые аккаунты закрыты', ['да','нет','частично','другое']);
+      if (num(w1.tmc) < 100) {
+        h += fieldSlider('tmc2', 'Обеспеченность ТМЦ сейчас, %', 0, 100, 1, num(w1.tmc)||90, 'Цель 100%');
+        h += fieldArea('tmcPlan2', 'Что закрыли и что осталось', 'Позиции, срок');
+      }
+      if (num(w1.zoneOrders) > 250) h += fieldArea('zonePlan2', 'Как поделили Зис', 'Что сделано');
+      if (num(w1.zoneCouriers) > 5) h += fieldArea('courierPlan2', 'Как перераспределили курьеров', 'Что сделано');
+      if (Math.min(num(w1.curatorProcess), num(w1.curatorAutonomy), num(w1.curatorKpi)) < 90) h += fieldArea('curatorPlan2', 'Что подтянули у куратора', 'Результат');
+      h += '</div>';
+    }
+
+    if (w === 3 || w === 4) {
+      h += '<div class="card"><h2>Неделя ' + w + '. Курьер под ключ и метрики</h2>';
+      h += fieldRadio('courierTurnkey', 'Курьер «под ключ» запущен', ['да','нет','частично','другое']);
+      h += fieldRadio('telegramGroups', 'Telegram-группы курьеры/кураторы созданы', ['да','нет','частично','другое']);
+      h += fieldSlider('lateness' + w, 'Опоздания на заказ, %', 0, 30, 0.5, num(wPrev['lateness'+(w-1)])||num(wPrev.lateness)||7, 'Цель 5–7%');
+      h += fieldSlider('appeals' + w, 'Обращения, %', 0, 30, 0.5, num(wPrev['appeals'+(w-1)])||num(wPrev.appeals)||5, 'Цель 0–5%');
+      h += fieldSlider('exits' + w, 'Выход по слотам, %', 0, 100, 1, num(wPrev['exits'+(w-1)])||num(wPrev.exits)||95, '');
+      h += fieldSlider('tmc' + w, 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev['tmc'+(w-1)])||num(wPrev.tmc)||100, 'Цель 100%');
+      h += fieldSlider('cost' + w, 'Стоимость заказа, руб.', 0, 500, 5, num(wPrev['cost'+(w-1)])||num(wPrev.cost)||150, '');
+      if ((num(wPrev['lateness'+(w-1)])||num(wPrev.lateness)) > 7) h += fieldArea('lateWhy' + w, 'Опоздания выше 7%. Причины и план', 'Что делаем');
+      if ((num(wPrev['appeals'+(w-1)])||num(wPrev.appeals)) > 5) h += fieldArea('appealWhy' + w, 'Обращения выше 5%. Причины и план', 'Что делаем');
+      h += '</div>';
+    }
+
+    if (w === 5) {
+      h += '<div class="card"><h2>Неделя 5. Автономность и стабильность</h2>';
+      h += fieldSlider('curatorAutonomy5', 'Автономность куратора, %', 0, 100, 1, num(wPrev.curatorAutonomy)||80, 'Цель 70–80%');
+      h += fieldSlider('curatorKpi5', 'Готовность к KPI, %', 0, 100, 1, num(wPrev.curatorKpi)||80, '');
+      h += fieldSlider('tmc5', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev['tmc4'])||num(wPrev.tmc)||100, 'Цель 100%');
+      h += fieldSlider('lateness5', 'Опоздания на заказ, %', 0, 30, 0.5, num(wPrev['lateness4'])||num(wPrev.lateness)||6, 'Цель 5–7%');
+      h += fieldSlider('appeals5', 'Обращения, %', 0, 30, 0.5, num(wPrev['appeals4'])||num(wPrev.appeals)||5, 'Цель 0–5%');
+      h += fieldRadio('courierForecast', 'Курьер прогнозирует заработок на завтра', ['да','нет','частично','другое']);
+      h += fieldArea('stabilityPlan', 'Что стабилизируем на неделе 6', 'План');
+      h += '</div>';
+    }
+
+    if (w === 6) {
+      h += '<div class="card"><h2>Неделя 6. Целевые KPI</h2>';
+      h += fieldSlider('lateness6', 'Опоздания на заказ, %', 0, 30, 0.5, num(wPrev['lateness5'])||num(wPrev.lateness)||6, 'Цель 5–7%');
+      h += fieldSlider('appeals6', 'Обращения, %', 0, 30, 0.5, num(wPrev['appeals5'])||num(wPrev.appeals)||5, 'Цель 0–5%');
+      h += fieldSlider('tmc6', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev.tmc5)||num(wPrev.tmc)||100, 'Цель 100%');
+      h += fieldSlider('curatorAutonomy6', 'Автономность куратора, %', 0, 100, 1, num(wPrev.curatorAutonomy5)||num(wPrev.curatorAutonomy)||90, 'Цель ≥90%');
+      h += fieldSlider('curatorKpi6', 'Готовность к KPI, %', 0, 100, 1, num(wPrev.curatorKpi5)||num(wPrev.curatorKpi)||90, 'Цель ≥90%');
+      h += fieldSlider('exits6', 'Выход по слотам, %', 0, 100, 1, num(wPrev['exits5'])||num(wPrev.exits)||95, '');
+      h += fieldRadio('autonomous', 'Куратор готов к самостоятельной работе', ['да','нет','частично','другое']);
+      h += fieldArea('finalPlan', 'Что остаётся сделать после 6-й недели', 'План');
+      h += '</div>';
+    }
+
+    // прибыль и причины
+    var p = profitForWeek(currentWeek);
+    if (p) {
+      var cal = calibration();
+      var prev = currentWeek > 1 ? profitForWeek(currentWeek - 1) : null;
+      var reasons = buildReasons(p, cal, prev);
+      h += '<div class="card" id="profitBlock"><h2>Прибыль и причины изменения маржи</h2>';
+      h += '<div class="kpi-grid">';
+      h += '<div class="kpi ok"><div class="name">Прибыль в день</div><div class="v">' + rub(p.profit) + '</div></div>';
+      h += '<div class="kpi"><div class="name">Выручка (маржа) в день</div><div class="v">' + rub(p.revenue) + '</div></div>';
+      h += '<div class="kpi"><div class="name">Оплата курьерам</div><div class="v">' + rub(p.courierPay) + '</div></div>';
+      h += '<div class="kpi bad"><div class="name">Потери</div><div class="v">' + rub(p.loss) + '</div></div>';
+      h += '</div>';
+      h += '<div class="hint">Маржа ' + p.marginPct + '% от стоимости заказа ' + p.cost + ' ₽. Куратор: ' + p.curatorMin + '% (порог ' + cal.curatorThreshold + '%).</div>';
+      h += renderWaterfall(p, prev);
+      h += renderReasons(reasons);
+      h += '</div>';
+    }
+
+    questionsEl.innerHTML = h;
+
+    // свои варианты
+    questionsEl.querySelectorAll('input[type="radio"]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        var other = questionsEl.querySelector('input[data-id="' + r.getAttribute('data-id') + '_other"]');
+        if (other) other.style.display = r.value === 'другое' ? 'block' : 'none';
+      });
+    });
+    questionsEl.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
+      c.addEventListener('change', function () {
+        var other = questionsEl.querySelector('input[data-id="' + c.getAttribute('data-group') + '_other"]');
+        if (!other) return;
+        var any = questionsEl.querySelectorAll('input[data-group="' + c.getAttribute('data-group') + '"]:checked');
+        var hasOther = Array.prototype.some.call(any, function (x) { return x.value === 'другое'; });
+        other.style.display = hasOther ? 'block' : 'none';
+      });
+    });
+
+    // ползунки: живое влияние на маржу
+    questionsEl.querySelectorAll('input[type="range"]').forEach(function (r) {
+      var id = r.getAttribute('data-id');
+      var out = document.getElementById(id + 'Val');
+      r.addEventListener('input', function () {
+        if (out) out.textContent = r.value;
+        setAnswer(id, r.value); save();
+        // подсветка поля, влияющего на маржу
+        var q = r.closest('.q');
+        if (q) { q.classList.remove('flash'); void q.offsetWidth; q.classList.add('flash'); }
+        // если меняется калибровка — пересобрать блок прибыли
+        if (w === 1 && ['marginPct','courierCost','kL','kA','kT','kE','curatorThreshold','curatorPenaltyPct','zonesCount','ordersPerZoneDay'].indexOf(id) !== -1) {
+          var block = document.getElementById('profitBlock');
+          if (block) {
+            var p2 = profitForWeek(currentWeek);
+            var cal2 = calibration();
+            var prev2 = currentWeek > 1 ? profitForWeek(currentWeek - 1) : null;
+            var reasons2 = buildReasons(p2, cal2, prev2);
+            var nh = '<h2>Прибыль и причины изменения маржи</h2>';
+            nh += '<div class="kpi-grid">';
+            nh += '<div class="kpi ok"><div class="name">Прибыль в день</div><div class="v">' + rub(p2.profit) + '</div></div>';
+            nh += '<div class="kpi"><div class="name">Выручка (маржа) в день</div><div class="v">' + rub(p2.revenue) + '</div></div>';
+            nh += '<div class="kpi"><div class="name">Оплата курьерам</div><div class="v">' + rub(p2.courierPay) + '</div></div>';
+            nh += '<div class="kpi bad"><div class="name">Потери</div><div class="v">' + rub(p2.loss) + '</div></div>';
+            nh += '</div>';
+            nh += '<div class="hint">Маржа ' + p2.marginPct + '% от стоимости заказа ' + p2.cost + ' ₽. Куратор: ' + p2.curatorMin + '% (порог ' + cal2.curatorThreshold + '%).</div>';
+            nh += renderWaterfall(p2, prev2);
+            nh += renderReasons(reasons2);
+            block.innerHTML = nh;
+          }
+        }
+        renderDeltas(); renderCharts(); updateResult(); updateAiReport(); updateLiveBar();
+      });
+    });
+    // остальные поля
+    questionsEl.querySelectorAll('input[type="text"], textarea, select').forEach(function (el) {
+      var id = el.getAttribute('data-id'); if (!id) return;
+      el.addEventListener('input', function () { setAnswer(id, el.value); save(); updateResult(); updateAiReport(); updateLiveBar(); });
+    });
+    questionsEl.querySelectorAll('input[type="radio"]').forEach(function (el) {
+      var id = el.getAttribute('data-id');
+      el.addEventListener('change', function () { setAnswer(id, el.value); save(); updateResult(); updateAiReport(); updateLiveBar(); });
+    });
+    questionsEl.querySelectorAll('input[type="checkbox"]').forEach(function (el) {
+      var group = el.getAttribute('data-group');
+      el.addEventListener('change', function () {
+        var arr = Array.prototype.slice.call(questionsEl.querySelectorAll('input[data-group="' + group + '"]:checked')).map(function (x) { return x.value; });
+        setAnswer(group, arr); save(); updateResult(); updateAiReport(); updateLiveBar();
+      });
+    });
+
+    function show(id, on) { var el = document.getElementById(id); if (el) el.classList.toggle('on', !!on); }
+    if (w === 1) {
+      show('followZone', num(getAnswer('zoneOrders')) > 250);
+      show('followCouriers', num(getAnswer('zoneCouriers')) > 5);
+      show('followTmc', num(getAnswer('tmc')) < 100);
+      show('followCurator', Math.min(num(getAnswer('curatorProcess')), num(getAnswer('curatorAutonomy')), num(getAnswer('curatorKpi'))) < calibration().curatorThreshold);
+    }
+
+    renderDeltas();
+  }
+
+  // ---------- графики ----------
+  function seriesFor(base, weeks) {
+    var arr = [];
+    for (var w = 1; w <= weeks; w++) {
+      var d = weekData(w);
+      var v = d[base + (w === 1 ? '' : w)] != null ? d[base + (w === 1 ? '' : w)] : d[base];
+      arr.push(v != null ? num(v) : null);
+    }
+    return arr;
+  }
+  function profitSeries(weeks) {
+    var arr = [];
+    for (var w = 1; w <= weeks; w++) { var p = profitForWeek(w); arr.push(p ? p.profit : null); }
+    return arr;
+  }
+  function lineChart(title, series, color, min, max, target) {
+    var W = 340, H = 160, P = 28, weeks = TOTAL_WEEKS;
+    var stepX = (W - P * 2) / (weeks - 1);
+    var pts = [];
+    series.forEach(function (v, i) {
+      if (v == null) return;
+      var x = P + i * stepX;
+      var y = H - P - ((v - min) / (max - min || 1)) * (H - P * 2);
+      pts.push({ x:x, y:y, v:v });
+    });
+    var path = pts.map(function (p, i) { return (i===0?'M':'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
+    var grid = '';
+    for (var g = 0; g <= 4; g++) {
+      var y = H - P - (g/4)*(H - P*2);
+      var val = min + (g/4)*(max - min);
+      grid += '<line x1="' + P + '" y1="' + y + '" x2="' + (W-P) + '" y2="' + y + '" stroke="#eef1f4"/>';
+      grid += '<text x="4" y="' + (y+4) + '" font-size="9" fill="#98a2b3">' + Math.round(val).toLocaleString('ru-RU') + '</text>';
+    }
+    var targetLine = '';
+    if (target != null) {
+      var ty = H - P - ((target - min)/(max - min || 1))*(H - P*2);
+      targetLine = '<line x1="' + P + '" y1="' + ty + '" x2="' + (W-P) + '" y2="' + ty + '" stroke="#f0a" stroke-dasharray="4 4"/>';
+    }
+    var dots = pts.map(function (p) {
+      return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="' + color + '"/><text x="' + p.x + '" y="' + (p.y-7) + '" font-size="9" text-anchor="middle" fill="#475467">' + Math.round(p.v).toLocaleString('ru-RU') + '</text>';
+    }).join('');
+    var labels = '';
+    for (var i = 0; i < weeks; i++) {
+      var x = P + i*stepX;
+      labels += '<text x="' + x + '" y="' + (H-6) + '" font-size="9" text-anchor="middle" fill="#667085">Н' + (i+1) + '</text>';
+    }
+    return '<div style="margin:10px 0 16px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">' + title + '</div>' +
+      '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '">' + grid + targetLine +
+      '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      dots + labels + '</svg></div>';
+  }
+  function renderCharts() {
+    var maxWeek = 1;
+    for (var w = 1; w <= TOTAL_WEEKS; w++) if (state.weeks[String(w)]) maxWeek = w;
+    var lateness = seriesFor('lateness', maxWeek);
+    var appeals = seriesFor('appeals', maxWeek);
+    var tmc = seriesFor('tmc', maxWeek);
+    var exits = seriesFor('exits', maxWeek);
+    var curator = seriesFor('curatorAutonomy', maxWeek);
+    var profits = profitSeries(maxWeek);
+    var maxProfit = Math.max.apply(null, profits.filter(function (v) { return v != null; }).concat([1]));
+    chartsEl.innerHTML =
+      lineChart('Прибыль в день, ₽', profits, '#0b8a4b', 0, maxProfit * 1.2, null) +
+      lineChart('Опоздания на заказ, % (цель 5–7%)', lateness, '#b42318', 0, 30, 6) +
+      lineChart('Обращения, % (цель 0–5%)', appeals, '#175cd3', 0, 30, 5) +
+      lineChart('Обеспеченность ТМЦ, % (цель 100%)', tmc, '#0b8a4b', 0, 100, 100) +
+      lineChart('Выход по слотам, %', exits, '#7a5af8', 0, 100, 95) +
+      lineChart('Автономность куратора, % (цель ≥90%)', curator, '#f79009', 0, 100, 90);
+  }
+
+  // ---------- сводка ----------
+  function updateResult() {
+    var lines = ['ОПРОСНИК ДАРКСТОРА', 'Цель: увеличение прибыли даркстора', ''];
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var d = weekData(w);
+      if (!d || Object.keys(d).length === 0) continue;
+      lines.push('=== НЕДЕЛЯ ' + w + ' ===');
+      Object.keys(d).forEach(function (k) {
+        var v = d[k];
+        if (Array.isArray(v)) v = v.join(', ');
+        if (v === '' || v == null) return;
+        lines.push(k + ': ' + v);
+      });
+      var p = profitForWeek(w);
+      if (p) lines.push('Прибыль в день: ' + rub(p.profit));
+      lines.push('');
+    }
+    var p1 = profitForWeek(1);
+    var pLast = profitForWeek(currentWeek);
+    if (p1 && pLast) {
+      var grow = p1.profit ? ((pLast.profit - p1.profit) / Math.abs(p1.profit) * 100) : 0;
+      lines.push('=== ИТОГ ПО ПРИБЫЛИ ===');
+      lines.push('Неделя 1: ' + rub(p1.profit) + '/день');
+      lines.push('Неделя ' + currentWeek + ': ' + rub(pLast.profit) + '/день');
+      lines.push('Изменение: ' + (grow >= 0 ? '+' : '') + grow.toFixed(1) + '%');
+      lines.push('Вывод: ' + (grow >= 0 ? 'прибыль выросла за счёт снижения потерь' : 'прибыль снизилась, требуется работа с потерями'));
+    }
+    resultEl.value = lines.join('\n');
+  }
+
+  // ---------- отчёт для ИИ ----------
+  function updateAiReport() {
+    var cal = calibration();
+    var lines = [];
+    lines.push('# ОТЧЁТ ДЛЯ АНАЛИЗА ИИ: ПЕРЕЗАГРУЗКА ДАРКСТОРА');
+    lines.push('');
+    lines.push('## 1. Цель');
+    lines.push('Главная цель: увеличение прибыли даркстора. Прибыль рассчитывается из метрик по неделям.');
+    lines.push('');
+    lines.push('## 2. Калибровка модели');
+    lines.push('- Количество Зисов: ' + cal.zonesCount);
+    lines.push('- Заказов в день на Зис: ' + cal.ordersPerZoneDay);
+    lines.push('- Маржа с заказа: ' + cal.marginPct + '%');
+    lines.push('- Стоимость заказа курьеру: ' + cal.courierCost + ' ₽');
+    lines.push('- Вес потерь от опозданий: ' + cal.kL + '% маржи на 1% опозданий');
+    lines.push('- Вес потерь от обращений: ' + cal.kA + '% маржи на 1% обращений');
+    lines.push('- Вес потерь от отсутствия ТМЦ: ' + cal.kT + '% маржи на 1% дефицита');
+    lines.push('- Вес потерь от недобора выходов: ' + cal.kE + '% маржи на 1%');
+    lines.push('- Порог готовности куратора: ' + cal.curatorThreshold + '%');
+    lines.push('- Штраф за куратора ниже порога: ' + cal.curatorPenaltyPct + '%');
+    lines.push('');
+    lines.push('## 3. Метрики и прибыль по неделям');
+    lines.push('| Неделя | Опоздания, % | Обращения, % | ТМЦ, % | Выходы, % | Куратор, % | Прибыль, ₽/день |');
+    lines.push('|---|---|---|---|---|---|---|');
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var p = profitForWeek(w);
+      if (!p) continue;
+      lines.push('| ' + w + ' | ' + p.lateness + ' | ' + p.appeals + ' | ' + p.tmc + ' | ' + p.exits + ' | ' + p.curatorMin + ' | ' + p.profit.toLocaleString('ru-RU') + ' |');
+    }
+    lines.push('');
+    lines.push('## 4. Причины изменения маржи по неделям');
+    for (var w2 = 1; w2 <= TOTAL_WEEKS; w2++) {
+      var p2 = profitForWeek(w2);
+      if (!p2) continue;
+      var prev = w2 > 1 ? profitForWeek(w2 - 1) : null;
+      var reasons = buildReasons(p2, cal, prev);
+      lines.push('### Неделя ' + w2);
+      lines.push('- Выручка: ' + rub(p2.revenue) + ', оплата курьерам: ' + rub(p2.courierPay) + ', потери: ' + rub(p2.loss) + ', прибыль: ' + rub(p2.profit));
+      reasons.forEach(function (r) {
+        lines.push('- ' + r.title + ' (' + (r.isNeg ? 'ухудшает' : 'норма') + '): ' + (r.value ? rub(Math.abs(r.value)) + ', ' + r.pct.toFixed(2) + '% выручки. ' : '') + 'Решение: ' + r.solution);
+      });
+      lines.push('');
+    }
+    lines.push('## 5. Топ-3 причины потерь на текущей неделе');
+    var pCur = profitForWeek(currentWeek);
+    if (pCur) {
+      var losses = [
+        { name:'Опоздания', v:pCur.lossLate },
+        { name:'Обращения', v:pCur.lossApp },
+        { name:'ТМЦ', v:pCur.lossTmc },
+        { name:'Выходы', v:pCur.lossExits }
+      ].sort(function (a,b) { return b.v - a.v; }).slice(0,3);
+      losses.forEach(function (x, i) { lines.push((i+1) + '. ' + x.name + ': ' + rub(x.v)); });
+    }
+    lines.push('');
+    lines.push('## 6. Риски');
+    var risks = [];
+    if (pCur) {
+      if (pCur.lateness > 7) risks.push('опоздания выше 7%');
+      if (pCur.appeals > 5) risks.push('обращения выше 5%');
+      if (pCur.tmc < 100) risks.push('ТМЦ не 100%');
+      if (pCur.exits < 95) risks.push('выходы ниже 95%');
+      if (pCur.curatorMin < cal.curatorThreshold) risks.push('куратор ниже порога ' + cal.curatorThreshold + '%');
+    }
+    lines.push(risks.length ? risks.join('; ') : 'критических отклонений нет');
+    lines.push('');
+    lines.push('## 7. Вопросы к ИИ');
+    lines.push('1. Какие 3 действия дадут максимальный рост прибыли за 2 недели при текущих метриках?');
+    lines.push('2. Какие веса потерь стоит пересчитать и на каких данных?');
+    lines.push('3. Где риск ухудшения метрик при росте маржи?');
+    lines.push('4. Какой план на неделю 7, если прибыль не растёт?');
+    aiReportEl.value = lines.join('\n');
+  }
+
+  function render() {
+    renderWeeks(); renderQuestions(); renderCharts(); updateResult(); updateAiReport(); updateLiveBar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    load(); render();
+    document.getElementById('nextBtn').addEventListener('click', function () { if (currentWeek < TOTAL_WEEKS) { currentWeek++; save(); render(); } });
+    document.getElementById('prevBtn').addEventListener('click', function () { if (currentWeek > 1) { currentWeek--; save(); render(); } });
+    document.getElementById('resetBtn').addEventListener('click', function () {
+      if (!confirm('Сбросить все недели?')) return;
+      localStorage.removeItem(KEY); state.weeks = {}; currentWeek = 1; render();
+    });
+    resultEl.addEventListener('click', function () {
+      resultEl.select();
+      if (navigator.clipboard) navigator.clipboard.writeText(resultEl.value).catch(function(){});
+    });
+    document.getElementById('copyAiBtn').addEventListener('click', function () {
+      var btn = this; var old = btn.textContent;
+      var done = function () { btn.textContent = 'Скопировано'; setTimeout(function () { btn.textContent = old; }, 1200); };
+      aiReportEl.select();
+      if (navigator.clipboard) navigator.clipboard.writeText(aiReportEl.value).then(done).catch(function () { document.execCommand('copy'); done(); });
+      else { document.execCommand('copy'); done(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
