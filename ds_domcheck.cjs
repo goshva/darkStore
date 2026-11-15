@@ -5,7 +5,7 @@ if (!m) throw new Error('no <script> block');
 let js = m[1];
 const idx = js.lastIndexOf('})();');
 if (idx < 0) throw new Error('no IIFE end');
-js = js.slice(0, idx) + '\n  globalThis.__t = { state: state, buildState: function (w) { state.weeks = w; }, setWeek: function (x) { currentWeek = x; }, readiness: reportReadiness, render: render, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf };\n' + js.slice(idx);
+js = js.slice(0, idx) + '\n  globalThis.__t = { state: state, buildState: function (w) { state.weeks = w; }, setWeek: function (x) { currentWeek = x; }, readiness: reportReadiness, render: render, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf, prefillZones: prefillZones, profitForWeek: profitForWeek };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -173,11 +173,11 @@ const FULL_W1 = {
 };
 t.buildState({
   1: FULL_W1,
-  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160 },
-  3: { lateness3: 7, appeals3: 6, exits3: 93, tmc3: 95, cost3: 160 },
-  4: { lateness4: 6.5, appeals4: 5.5, exits4: 94, tmc4: 97, cost4: 165 },
-  5: { lateness5: 6, appeals5: 5, tmc5: 98, exits5: 96, cost5: 165, curatorAutonomy5: 75, curatorKpi5: 70, curatorTraining5: 80, curatorInvolvement5: 70 },
-  6: { lateness6: 6, appeals6: 4, tmc6: 100, exits6: 95, cost6: 165, curatorAutonomy6: 90, curatorKpi6: 90, curatorTraining6: 90, curatorInvolvement6: 90, finalPlan: 'Держать KPI' }
+  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160, curatorProcess2: 90, curatorAutonomy2: 85, curatorKpi2: 80, curatorTraining2: 90, curatorInvolvement2: 85 },
+  3: { lateness3: 7, appeals3: 6, exits3: 93, tmc3: 95, cost3: 160, curatorProcess3: 90, curatorAutonomy3: 88, curatorKpi3: 85, curatorTraining3: 90, curatorInvolvement3: 88 },
+  4: { lateness4: 6.5, appeals4: 5.5, exits4: 94, tmc4: 97, cost4: 165, curatorProcess4: 90, curatorAutonomy4: 90, curatorKpi4: 88, curatorTraining4: 92, curatorInvolvement4: 90 },
+  5: { lateness5: 6, appeals5: 5, tmc5: 98, exits5: 96, cost5: 165, curatorProcess5: 90, curatorAutonomy5: 75, curatorKpi5: 70, curatorTraining5: 80, curatorInvolvement5: 70 },
+  6: { lateness6: 6, appeals6: 4, tmc6: 100, exits6: 95, cost6: 165, curatorProcess6: 90, curatorAutonomy6: 90, curatorKpi6: 90, curatorTraining6: 90, curatorInvolvement6: 90, finalPlan: 'Держать KPI' }
 });
 t.setWeek(6);
 assert(t.readiness().ready === true, 'все недели заполнены -> готовность анализа = true');
@@ -197,11 +197,11 @@ assert(store['darkstore_profit_live_v5'].includes('finalReport'), 'final report 
 const REQUIRED_CONTROLS = {
   1: ['zonesCount','ordersPerZoneDay','cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct',
       'lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'],
-  2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2'],
-  3: ['lateness3','appeals3','exits3','tmc3','cost3'],
-  4: ['lateness4','appeals4','exits4','tmc4','cost4'],
-  5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
-  6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
+  2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2','curatorProcess2','curatorAutonomy2','curatorKpi2','curatorTraining2','curatorInvolvement2'],
+  3: ['lateness3','appeals3','exits3','tmc3','cost3','curatorProcess3','curatorAutonomy3','curatorKpi3','curatorTraining3','curatorInvolvement3'],
+  4: ['lateness4','appeals4','exits4','tmc4','cost4','curatorProcess4','curatorAutonomy4','curatorKpi4','curatorTraining4','curatorInvolvement4'],
+  5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorProcess5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
+  6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorProcess6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
 };
 for (let w = 1; w <= 6; w++) {
   t.setWeek(w);
@@ -239,5 +239,24 @@ assert(getEl('questions').innerHTML.indexOf('curatorNotes5') !== -1, 'недел
 t.setWeek(6);
 t.render(true);
 assert(getEl('questions').innerHTML.indexOf('curatorNotes6') !== -1, 'неделя 6: комментарий куратора по выходам');
+
+// --- предзаполнение таблицы Зисов из калибровки (шаг 4 плана) ---
+t.buildState({
+  1: {
+    zonesCount: '6', ordersPerZoneDay: '220', cost: '1050', marginPct: '13', courierCost: '150',
+    kL: '0.5', kA: '0.7', kT: '1', kE: '0.3', kC: '1', curatorThreshold: '90', curatorPenaltyPct: '5',
+    lateness: '7', appeals: '5', tmc: '100', exits: '95',
+    curatorProcess: '90', curatorAutonomy: '90', curatorKpi: '90', curatorTraining: '90', curatorInvolvement: '90'
+  }
+});
+t.setWeek(1);
+t.render(true);
+t.prefillZones();
+const zPref = t.state.weeks['1'].zones;
+assert(Array.isArray(zPref) && zPref.length === 6, 'предзаполнение создало 6 Зисов по калибровке (got ' + (zPref && zPref.length) + ')');
+assert(zPref.every(z => z.orders === 220 && z.rate === 150), 'в строках заказы 220 и ставка 150 из калибровки');
+assert(t.profitForWeek(1).Q === 1320, 'объём из таблицы Зисов = 6 × 220 = 1320 (got ' + t.profitForWeek(1).Q + ')');
+assert(t.profitForWeek(1).rate === 150, 'средневзвешенная ставка = 150 ₽ (got ' + t.profitForWeek(1).rate + ')');
+assert(getEl('aiApplyStatus').textContent.indexOf('заполнена по калибровке') !== -1, 'статус сообщает о предзаполнении');
 
 console.log('\nDONE');

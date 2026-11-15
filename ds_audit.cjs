@@ -186,22 +186,22 @@ const gateRep = t.buildFinalReport();
 check(gateRep.indexOf('- [OK] куратор (индекс) ≥ 60%: 70%') !== -1, 'Н-4: гейт куратора использует калиброванный порог 60%');
 check(gateRep.indexOf('куратор (индекс) ≥ 90%') === -1, 'Н-4: литерал 90% в гейте больше не используется');
 
-// Гейт по унаследованной метрике не должен засчитываться: неделя 4 без полей куратора
+// Гейт по унаследованной метрике не должен засчитываться: неделя 2 без своего ТМЦ (берётся из недели 1)
 t.buildState({
-  1: BUILTIN[1],
-  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 26.5, appeals2: 15, exits2: 90, cost2: 100, tmc: '76' },
-  3: { lateness3: 21, appeals3: 12, exits3: 97, tmc3: 32, cost3: 100 },
-  4: { lateness4: 6.5, appeals4: 9.5, exits4: 98, tmc4: 90, cost4: 100 }
+  1: Object.assign({}, BUILTIN[1], { tmc: '100' }),
+  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 26.5, appeals2: 15, exits2: 90, cost2: 100,
+       curatorAutonomy2: 80, curatorKpi2: 80, curatorTraining2: 80, curatorInvolvement2: 80 }
 });
 const inhRep = t.buildFinalReport();
 const inhSum = JSON.parse(inhRep.slice(inhRep.indexOf('{\n  "model_version"'), inhRep.indexOf('\n\n## 7.')));
-const curGate = (inhSum.gates || []).find(function (g) { return g.name.indexOf('куратор') === 0; });
-check(!!curGate && curGate.measured === false && curGate.ok === null, 'гейт куратора по неделе без полей куратора помечен как неизмеренный');
-check(inhRep.indexOf('[Н/Д] куратор') !== -1, 'в тексте отчёта гейт куратора = [Н/Д]');
+check(inhSum.gates_week === 2, 'гейты считаются по последней полной неделе (2)');
+const tmcGate = (inhSum.gates || []).find(function (g) { return g.name.indexOf('ТМЦ') === 0; });
+check(!!tmcGate && tmcGate.measured === false && tmcGate.ok === null, 'гейт ТМЦ по неделе без своего ТМЦ помечен как неизмеренный');
+check(inhRep.indexOf('[Н/Д] ТМЦ') !== -1, 'в тексте отчёта гейт ТМЦ = [Н/Д]');
 check(inhSum.gates_passed === (inhSum.gates.filter(function (g) { return g.measured; }).every(function (g) { return g.ok; })),
   'gates_passed не учитывает [Н/Д]');
-check(inhSum.weeks.find(function (w) { return w.week === 4; }).measured.curator === false, 'неделя 4: measured.curator = false');
-check(inhSum.weeks.find(function (w) { return w.week === 4; }).data_quality.score === 0.9, 'неделя 4: качество данных 0.9');
+check(inhSum.weeks.find(function (w) { return w.week === 2; }).measured.tmc === false, 'неделя 2: measured.tmc = false');
+check(inhSum.weeks.find(function (w) { return w.week === 2; }).data_quality.score === 0.88, 'неделя 2: качество данных 0.88');
 
 // Н-6: MAPE без данных — null, а не 0
 check(rep.indexOf('"mape_pct": null') !== -1, 'Н-6: в задаче оценщику mape_pct = null');

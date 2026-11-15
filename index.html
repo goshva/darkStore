@@ -338,7 +338,8 @@
     // новые поля: тарифы по зизам и комментарии куратора
     zones:4, curatorNotes1:2, curatorNotes2:2, curatorNotes3:2, curatorNotes4:2, curatorNotes5:2, curatorNotes6:2,
     // куратор измеряется каждую неделю (не только на Н1 и Н5–Н6)
-    curatorKpi2:3, curatorTraining2:3, curatorInvolvement2:3,
+    curatorProcess2:3, curatorKpi2:3, curatorTraining2:3, curatorInvolvement2:3,
+    curatorProcess3:3, curatorProcess4:3, curatorProcess5:3, curatorProcess6:3,
     curatorAutonomy3:3, curatorKpi3:3, curatorTraining3:3, curatorInvolvement3:3,
     curatorAutonomy4:3, curatorKpi4:3, curatorTraining4:3, curatorInvolvement4:3
   };
@@ -398,7 +399,9 @@
     curatorProcess:'Понимание процессов куратором, %', curatorAutonomy:'Автономность куратора, %',
     curatorKpi:'Готовность куратора к KPI, %', curatorTraining:'Обучение куратора, %', curatorInvolvement:'Вовлечённость куратора, %',
     zoneOrders2:'Заказов на Зис (Н2)', zoneCouriers2:'Курьеров на Зис (Н2)',
-    curatorAutonomy2:'Автономность куратора, % (Н2)', curatorKpi2:'Готовность куратора к KPI, % (Н2)',
+    curatorProcess2:'Понимание процессов куратором, % (Н2)', curatorAutonomy2:'Автономность куратора, % (Н2)', curatorKpi2:'Готовность куратора к KPI, % (Н2)',
+    curatorProcess3:'Понимание процессов куратором, % (Н3)', curatorProcess4:'Понимание процессов куратором, % (Н4)',
+    curatorProcess5:'Понимание процессов куратором, % (Н5)', curatorProcess6:'Понимание процессов куратором, % (Н6)',
     curatorTraining2:'Обучение куратора, % (Н2)', curatorInvolvement2:'Вовлечённость куратора, % (Н2)',
     curatorAutonomy3:'Автономность куратора, % (Н3)', curatorKpi3:'Готовность куратора к KPI, % (Н3)',
     curatorTraining3:'Обучение куратора, % (Н3)', curatorInvolvement3:'Вовлечённость куратора, % (Н3)',
@@ -417,11 +420,11 @@
   var REQUIRED_BASE = {
     1: ['zonesCount','ordersPerZoneDay','cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct',
         'lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'],
-    2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2'],
-    3: ['lateness3','appeals3','exits3','tmc3','cost3'],
-    4: ['lateness4','appeals4','exits4','tmc4','cost4'],
-    5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
-    6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
+    2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2','curatorProcess2','curatorAutonomy2','curatorKpi2','curatorTraining2','curatorInvolvement2'],
+    3: ['lateness3','appeals3','exits3','tmc3','cost3','curatorProcess3','curatorAutonomy3','curatorKpi3','curatorTraining3','curatorInvolvement3'],
+    4: ['lateness4','appeals4','exits4','tmc4','cost4','curatorProcess4','curatorAutonomy4','curatorKpi4','curatorTraining4','curatorInvolvement4'],
+    5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorProcess5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
+    6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorProcess6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
   };
   // Поля комментариев куратора по каждой неделе
   // Комментарии куратора по выходам: свой id на каждую неделю (curatorComment занят планом по куратору)
@@ -1076,6 +1079,7 @@
   var LOSS_WEIGHT_DEFAULTS = { kL: 0.5, kA: 0.7, kT: 1.0, kE: 0.3 };
   function lossWeightsCheck(cal, p) {
     if (!p || !p.revenue) return null;
+    cal = cal || calibration();
     var share = p.loss / p.revenue * 100;
     var heavy = ['kL','kA','kT','kE'].filter(function (k) { return cal[k] > LOSS_WEIGHT_DEFAULTS[k] * 3; });
     if (share < 50 && !heavy.length) return null;
@@ -1101,7 +1105,9 @@
       note: 'потери ' + shareR + '% выручки' +
         (heavy.length
           ? '; веса потерь ' + heavy.join(', ') + ' выше дефолтных более чем в 3 раза' +
-            (marginDef != null ? ' (при дефолтных весах безубыточная маржа была бы ' + Math.round(marginDef) + ' ₽ вместо ' + Math.round(p.rate / Math.max(0.01, 1 - share / 100)) + ' ₽)' : '') +
+            (share < 100
+              ? (marginDef != null ? ' (при дефолтных весах безубыточная маржа была бы ' + Math.round(marginDef) + ' ₽ вместо ' + Math.round(p.rate / (1 - share / 100)) + ' ₽)' : '')
+              : (marginDef != null ? ' (при текущих весах безубыточность недостижима, при дефолтных — ' + Math.round(marginDef) + ' ₽ с заказа)' : '')) +
             ' — сначала сверьте калибровку весов: при таких значениях выводы определяются весами, а не работой даркстора'
           : ' — сначала закройте операционные потери (ТМЦ, опоздания, куратор): при таких потерях выводы о марже и объёме делать нельзя')
     };
@@ -1475,6 +1481,24 @@
     refreshAfterZoneChange();
   }
 
+  // Быстрый старт: создать строки по калибровке, дальше пользователь уточняет км/ходку/ставку по зоне
+  function prefillZones() {
+    var d1 = weekData(1);
+    var cal = calibration();
+    var n = Math.max(1, Math.min(30, Math.round(num(d1.zonesCount) || cal.zonesCount)));
+    var rate = Math.round(num(d1.courierCost) || cal.courierCost);
+    var orders = Math.round(num(d1.ordersPerZoneDay) || cal.ordersPerZoneDay);
+    var zones = [];
+    for (var i = 0; i < n; i++) {
+      zones.push({ km: null, orders: orders, tripTime: num(d1.tripTime) || null, returnTime: null, rate: rate, couriers: num(d1.zoneCouriers) || null });
+    }
+    setAnswer('zones', zones); save();
+    renderZoneTable();
+    refreshAfterZoneChange();
+    setStatus('Таблица Зисов заполнена по калибровке: ' + n + ' Зисов по ' + orders + ' заказов, ставка ' + rate +
+      ' ₽. Уточните км, время ходки/возврата и ставку по удалённости (диапазон ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽).', false);
+  }
+
   function renderDeltas() {
     document.querySelectorAll('[data-delta]').forEach(function (el) {
       var id = el.getAttribute('data-delta');
@@ -1614,7 +1638,8 @@
       h += '<div class="card"><h2>Неделя 1. Тарифы по Зисам</h2>';
       h += '<div class="hint" style="margin-bottom:8px;">Добавьте каждый Зис с его метриками: км, заказов/день, время ходки, возврат, ставка (100–180 ₽), курьеров. Средняя ставка пересчитывается автоматически. Зис >250 заказов или >5 курьеров — предупреждение.</div>';
       h += '<div id="zoneTableWrap"></div>';
-      h += '<div class="ai-actions"><button type="button" class="mini-btn" id="addZoneBtn">+ Добавить Зис</button></div>';
+      h += '<div class="ai-actions"><button type="button" class="mini-btn" id="addZoneBtn">+ Добавить Зис</button>' +
+        '<button type="button" class="mini-btn" id="prefillZonesBtn">Заполнить из калибровки</button></div>';
       h += '</div>';
     }
 
@@ -1637,6 +1662,7 @@
       if (num(w1.zoneOrders) > 250) h += fieldArea('zonePlan2', 'Как поделили Зис', 'Что сделано');
       if (num(w1.zoneCouriers) > 5) h += fieldArea('courierPlan2', 'Как перераспределили курьеров', 'Что сделано');
       var curatorW1 = Math.min(num(w1.curatorProcess) || 90, num(w1.curatorAutonomy) || 90, num(w1.curatorKpi) || 90);
+      h += fieldSlider('curatorProcess2', 'Понимание процессов куратором, %', 0, 100, 1, num(w1.curatorProcess)||90, 'Первая компонента индекса готовности');
       h += fieldSlider('curatorAutonomy2', 'Автономность куратора сейчас, %', 0, 100, 1, num(w1.curatorAutonomy)||80, 'Цель ≥' + calibration().curatorThreshold + '%');
       h += fieldSlider('curatorKpi2', 'Готовность куратора к KPI, %', 0, 100, 1, num(w1.curatorKpi)||80, 'Цель ≥' + calibration().curatorThreshold + '%');
       h += fieldSlider('curatorTraining2', 'Обучение куратора, %', 0, 100, 1, num(w1.curatorTraining)||90, 'Входит в индекс готовности: влияет на потери');
@@ -1659,6 +1685,7 @@
       h += fieldSlider('cost' + w, 'Ставка курьеру за заказ, руб.', 0, 500, 5, num(wPrev['cost'+(w-1)])||num(wPrev.courierCost)||150, 'Пересчитанная ставка по Зисам');
       if ((num(wPrev['lateness'+(w-1)])||num(wPrev.lateness)) > 7) h += fieldArea('lateWhy' + w, 'Опоздания выше 7%. Причины и план', 'Что делаем');
       if ((num(wPrev['appeals'+(w-1)])||num(wPrev.appeals)) > 5) h += fieldArea('appealWhy' + w, 'Обращения выше 5%. Причины и план', 'Что делаем');
+      h += fieldSlider('curatorProcess' + w, 'Понимание процессов куратором, %', 0, 100, 1, num(wPrev['curatorProcess'+(w-1)])||num(wPrev.curatorProcess)||90, 'Первая компонента индекса готовности');
       h += fieldSlider('curatorAutonomy' + w, 'Автономность куратора, %', 0, 100, 1, num(wPrev['curatorAutonomy'+(w-1)])||num(wPrev.curatorAutonomy)||80, 'Цель ≥' + calibration().curatorThreshold + '%');
       h += fieldSlider('curatorKpi' + w, 'Готовность куратора к KPI, %', 0, 100, 1, num(wPrev['curatorKpi'+(w-1)])||num(wPrev.curatorKpi)||80, '');
       h += fieldSlider('curatorTraining' + w, 'Обучение куратора, %', 0, 100, 1, num(wPrev['curatorTraining'+(w-1)])||num(wPrev.curatorTraining)||90, 'Входит в индекс готовности');
@@ -1669,6 +1696,7 @@
 
     if (w === 5) {
       h += '<div class="card"><h2>Неделя 5. Автономность и стабильность</h2>';
+      h += fieldSlider('curatorProcess5', 'Понимание процессов куратором, %', 0, 100, 1, num(wPrev.curatorProcess)||90, 'Первая компонента индекса готовности');
       h += fieldSlider('curatorAutonomy5', 'Автономность куратора, %', 0, 100, 1, num(wPrev.curatorAutonomy)||80, 'Цель 70–80%');
       h += fieldSlider('curatorKpi5', 'Готовность к KPI, %', 0, 100, 1, num(wPrev.curatorKpi)||80, '');
       h += fieldSlider('tmc5', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev['tmc4'])||num(wPrev.tmc)||100, 'Цель 100%');
@@ -1689,6 +1717,7 @@
       h += fieldSlider('lateness6', 'Опоздания на заказ, %', 0, 30, 0.5, num(wPrev['lateness5'])||num(wPrev.lateness)||6, 'Цель 5–7%');
       h += fieldSlider('appeals6', 'Обращения, %', 0, 30, 0.5, num(wPrev['appeals5'])||num(wPrev.appeals)||5, 'Цель 0–5%');
       h += fieldSlider('tmc6', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev.tmc5)||num(wPrev.tmc)||100, 'Цель 100%');
+      h += fieldSlider('curatorProcess6', 'Понимание процессов куратором, %', 0, 100, 1, num(wPrev.curatorProcess5)||num(wPrev.curatorProcess)||90, 'Первая компонента индекса готовности');
       h += fieldSlider('curatorAutonomy6', 'Автономность куратора, %', 0, 100, 1, num(wPrev.curatorAutonomy5)||num(wPrev.curatorAutonomy)||90, 'Цель ≥90%');
       h += fieldSlider('curatorKpi6', 'Готовность к KPI, %', 0, 100, 1, num(wPrev.curatorKpi5)||num(wPrev.curatorKpi)||90, 'Цель ≥90%');
       h += fieldSlider('curatorTraining6', 'Обучение куратора, %', 0, 100, 1, num(wPrev.curatorTraining5)||num(wPrev.curatorTraining)||90, 'Входит в индекс готовности: влияет на потери');
@@ -1715,6 +1744,8 @@
     if (confirmBtn) confirmBtn.addEventListener('click', confirmVisibleFields);
     var addZoneBtn = document.getElementById('addZoneBtn');
     if (addZoneBtn) addZoneBtn.addEventListener('click', addZone);
+    var prefillBtn = document.getElementById('prefillZonesBtn');
+    if (prefillBtn) prefillBtn.addEventListener('click', prefillZones);
     if (w === 1) renderZoneTable();
 
     // свои варианты
@@ -2478,6 +2509,55 @@
     L.push('- ТМЦ 100% и куратор ≥' + cal.curatorThreshold + '% (индекс готовности) — удерживать две недели подряд.');
     L.push('- Вклад с заказа ≥ 0 и выход в плюс — экономика не регрессирует ниже уровня недели 6.');
     L.push('- Ставка курьеру в диапазоне ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽; пересмотр — только через таблицу тарифов по Зисам.');
+    L.push('');
+    var lwP2 = lossWeightsCheck(cal, p || p1);
+    L.push('### 4.4. Проверка калибровки весов');
+    if (lwP2) {
+      L.push('| Вес | В проекте | Дефолт | Отношение |');
+      L.push('|---|---|---|---|');
+      [['kL','опоздания'],['kA','обращения'],['kT','дефицит ТМЦ'],['kE','недобор выходов']].forEach(function (pair) {
+        L.push('| ' + pair[0] + ' — ' + pair[1] + ' | ' + lwP2.weights[pair[0]] + '% | ' + lwP2.defaults[pair[0]] + '% | ×' + lwP2.ratios[pair[0]] + ' |');
+      });
+      L.push('- !! ' + lwP2.note + '.');
+      if (lwP2.at_defaults.required_margin_rub != null) {
+        L.push('- При дефолтных весах безубыточная маржа была бы ' + rub(lwP2.at_defaults.required_margin_rub) + ' с заказа' +
+          (lwP2.at_defaults.required_margin_pct_of_price != null ? ' (' + lwP2.at_defaults.required_margin_pct_of_price + '% от чека)' : '') + '.');
+      }
+      L.push('- Пока веса не сверены, не делай выводов о марже и объёме: сначала предложи проверку kL/kA/kT/kE и подтверждение фактом.');
+    } else {
+      L.push('Веса потерь в пределах дефолтов — калибровка рабочая.');
+    }
+    L.push('');
+    var jumpP = [];
+    for (var jw2 = 1; jw2 <= TOTAL_WEEKS; jw2++) {
+      var jq2 = dataQualityOf(jw2);
+      if (jq2.jumps && jq2.jumps.length) jq2.jumps.forEach(function (j) { jumpP.push('Н' + jw2 + ': ' + j.note); });
+    }
+    L.push('### 4.5. Скачки метрик (проверка на артефакт ввода)');
+    if (!jumpP.length) L.push('Резких скачков по измеренным метрикам нет.');
+    else {
+      jumpP.forEach(function (x) { L.push('- ' + x + '.'); });
+      L.push('- По неделям со скачками: не делай выводов, пока причина не подтверждена (реальный срыв или ошибка ввода). Если причина неизвестна — верни это в open_questions.');
+    }
+    L.push('');
+    L.push('### 4.6. Что держим (не допускать регресса)');
+    var keepP2 = (function () { for (var w = TOTAL_WEEKS; w >= 1; w--) { if (weekComplete(w)) { var pp = profitForWeek(w); if (pp) return { w: w, p: pp }; } } return null; })();
+    if (keepP2) {
+      var keepList = [
+        ['опоздания ≤ ' + TARGET_KPI.lateness + '%', keepP2.p.lateness + '%', keepP2.p.lateness <= TARGET_KPI.lateness],
+        ['обращения ≤ ' + TARGET_KPI.appeals + '%', keepP2.p.appeals + '%', keepP2.p.appeals <= TARGET_KPI.appeals],
+        ['ТМЦ = ' + TARGET_KPI.tmc + '%', keepP2.p.tmc + '%', keepP2.p.tmc >= TARGET_KPI.tmc],
+        ['выходы ≥ ' + TARGET_KPI.exits + '%', keepP2.p.exits + '%', keepP2.p.exits >= TARGET_KPI.exits],
+        ['куратор (индекс) ≥ ' + cal.curatorThreshold + '%', Math.round(keepP2.p.curatorIndex * 10) / 10 + '%', keepP2.p.curatorIndex >= cal.curatorThreshold],
+        ['вклад с заказа ≥ 0 ₽', rub(keepP2.p.contribution), keepP2.p.contribution >= 0]
+      ];
+      L.push('Неделя ' + keepP2.w + ':');
+      keepList.forEach(function (k) { L.push('- ' + (k[2] ? '[ДЕРЖИМ] ' : '[ВЫТЯГИВАЕМ] ') + k[0] + ': ' + k[1]); });
+      var holdHold = keepList.filter(function (k) { return k[2]; }).map(function (k) { return k[0]; });
+      if (holdHold.length) L.push('- Правило: действия не должны ухудшать ' + holdHold.join(', ') + '. Если действие угрожает этим метрикам — вынеси риск и компенсацию в assumptions.');
+    } else {
+      L.push('Нет недели с полным набором данных.');
+    }
     L.push('');
     L.push('## 6. Формат ответа (JSON, ' + SCHEMA_VERSION + ')');
     var srcLabel = week > 1 ? 'метрики недель 1–' + week : 'метрики недели 1';
@@ -3340,6 +3420,69 @@
     }
     L.push('Если любая цель нарушена — сначала возврат к операционным причинам (слоты, ТМЦ, куратор), потом экономика.');
     L.push('');
+    L.push('## 4.3. Проверка калибровки и данных');
+    var lwRep2 = lossWeightsCheck(calF, (gateP || lastP));
+    if (lwRep2) {
+      L.push('### Веса потерь');
+      L.push('| Вес | В проекте | Дефолт модели | Отношение |');
+      L.push('|---|---|---|---|');
+      [['kL','опоздания'],['kA','обращения'],['kT','дефицит ТМЦ'],['kE','недобор выходов']].forEach(function (pair) {
+        L.push('| ' + pair[0] + ' — ' + pair[1] + ' | ' + lwRep2.weights[pair[0]] + '% | ' + lwRep2.defaults[pair[0]] + '% | ×' + lwRep2.ratios[pair[0]] + ' |');
+      });
+      L.push('');
+      L.push('!! ' + lwRep2.note + '.');
+      L.push('- Доля потерь: ' + lwRep2.loss_share_pct + '% выручки с текущими весами' + (lwRep2.at_defaults.loss_share_pct != null ? '; при дефолтных весах — ' + lwRep2.at_defaults.loss_share_pct + '%' : '') + '.');
+      if (lwRep2.at_defaults.required_margin_rub != null) {
+        L.push('- Безубыточная маржа при дефолтных весах: ' + rub(lwRep2.at_defaults.required_margin_rub) + ' с заказа' +
+          (lwRep2.at_defaults.required_margin_pct_of_price != null ? ' (' + lwRep2.at_defaults.required_margin_pct_of_price + '% от чека)' : '') + '. Сверьте веса, прежде чем менять маржу.');
+      }
+    } else {
+      L.push('### Веса потерь');
+      L.push('Веса потерь в пределах дефолтных значений (kL ' + LOSS_WEIGHT_DEFAULTS.kL + '%, kA ' + LOSS_WEIGHT_DEFAULTS.kA + '%, kT ' + LOSS_WEIGHT_DEFAULTS.kT + '%, kE ' + LOSS_WEIGHT_DEFAULTS.kE + '%), доля потерь ниже 50% выручки — калибровка выглядит рабочей.');
+    }
+    L.push('');
+    var jumpRows = [];
+    for (var jw = 1; jw <= TOTAL_WEEKS; jw++) {
+      var jq = dataQualityOf(jw);
+      if (jq.jumps && jq.jumps.length) jq.jumps.forEach(function (j) { jumpRows.push('Н' + jw + ': ' + j.note); });
+    }
+    L.push('### Скачки метрик (проверка на артефакт ввода)');
+    if (!jumpRows.length) L.push('Резких скачков по измеренным метрикам нет.');
+    else jumpRows.forEach(function (x) { L.push('- ' + x + '.'); });
+    L.push('');
+    L.push('### План дозаполнения');
+    var gaps = [];
+    for (var gw2 = 1; gw2 <= TOTAL_WEEKS; gw2++) {
+      var gcov = weekCoverage(gw2);
+      var gq = dataQualityOf(gw2);
+      var gmiss = gcov.missingLabels.slice();
+      if (gq.score < 1) gq.issues.forEach(function (x) { if (gmiss.indexOf(x) === -1) gmiss.push(x); });
+      if (gmiss.length) gaps.push('Н' + gw2 + ' (качество ' + gq.score + '): ' + gmiss.join('; '));
+    }
+    if (!zonesList.length) gaps.push('Таблица Зисов не заполнена: км, заказы/день, ходка, возврат, ставка по зоне — без неё тариф не обоснован');
+    if (!benchmarkEntries().length) gaps.push('Бенчмарки рынка не подключены (нужны значение, источник, дата)');
+    if (!gaps.length) L.push('Все обязательные поля заполнены, тариф по Зисам обоснован, бенчмарки подключены.');
+    else gaps.forEach(function (x) { L.push('- ' + x + '.'); });
+    L.push('');
+    L.push('## 4.4. Что держим (не допускать регресса)');
+    var keepP = gateP || lastP;
+    if (keepP) {
+      var keep = [
+        ['опоздания ≤ ' + TARGET_KPI.lateness + '%', keepP.lateness + '%', keepP.lateness <= TARGET_KPI.lateness],
+        ['обращения ≤ ' + TARGET_KPI.appeals + '%', keepP.appeals + '%', keepP.appeals <= TARGET_KPI.appeals],
+        ['ТМЦ = ' + TARGET_KPI.tmc + '%', keepP.tmc + '%', keepP.tmc >= TARGET_KPI.tmc],
+        ['выходы ≥ ' + TARGET_KPI.exits + '%', keepP.exits + '%', keepP.exits >= TARGET_KPI.exits],
+        ['куратор (индекс) ≥ ' + calF.curatorThreshold + '%', Math.round(keepP.curatorIndex * 10) / 10 + '%', keepP.curatorIndex >= calF.curatorThreshold],
+        ['вклад с заказа ≥ 0 ₽', rub(keepP.contribution), keepP.contribution >= 0]
+      ];
+      L.push('Неделя ' + (gateW || lastW) + '. Метрики, которые уже в цели — их нельзя терять при работе над остальным:');
+      keep.forEach(function (k) { L.push('- ' + (k[2] ? '[ДЕРЖИМ] ' : '[ВЫТЯГИВАЕМ] ') + k[0] + ': ' + k[1]); });
+      var risky = keep.filter(function (k) { return !k[2]; });
+      if (risky.length) L.push('Приоритет: ' + risky.map(function (k) { return k[0]; }).join(', ') + '.');
+    } else {
+      L.push('Нет недели с полным набором данных — держать пока нечего.');
+    }
+    L.push('');
     L.push('## 5. Что осталось сделать');
     L.push(tail ? String(tail) : 'не заполнено (поле «Что остаётся сделать после 6-й недели» пустое).');
     L.push('');
@@ -3504,6 +3647,35 @@
         : '',
       gates_passed: gatesPassed(gates),
       data_quality: { score: projQ.score, weeks: projQ.weeks, issues: projQ.issues, scale: '0-1 (введено = 1, унаследовано = 0.5, дефолт = 0)' },
+      loss_weights_check: lwRep2 ? {
+        status: lwRep2.overweighted.length ? 'overweighted' : 'losses_dominate',
+        weights: lwRep2.weights, defaults: lwRep2.defaults, ratios: lwRep2.ratios,
+        loss_share_pct: lwRep2.loss_share_pct,
+        at_defaults: lwRep2.at_defaults,
+        note: lwRep2.overweighted.length
+          ? 'Веса ' + lwRep2.overweighted.join(', ') + ' выше дефолтных более чем в 3 раза: выводы о марже и объёме определяются калибровкой, а не работой даркстора. Сверьте kL/kA/kT/kE.'
+          : 'Веса в пределах дефолтов, но потери превышают половину выручки: сначала закройте операционные потери, потом считайте маржу.'
+      } : {
+        status: 'ok',
+        weights: { kL: calF.kL, kA: calF.kA, kT: calF.kT, kE: calF.kE },
+        defaults: LOSS_WEIGHT_DEFAULTS,
+        at_defaults: null,
+        note: 'Веса в пределах дефолтных значений (или потери ниже 50% выручки) — калибровка выглядит рабочей.'
+      },
+      metric_jumps: jumpRows.map(function (x) { return x; }),
+      keep_targets: (function () {
+        var kp = gateP || lastP;
+        if (!kp) return [];
+        return [
+          { metric: 'lateness_pct', target: TARGET_KPI.lateness, current: kp.lateness, holding: kp.lateness <= TARGET_KPI.lateness },
+          { metric: 'appeals_pct', target: TARGET_KPI.appeals, current: kp.appeals, holding: kp.appeals <= TARGET_KPI.appeals },
+          { metric: 'tmc_pct', target: TARGET_KPI.tmc, current: kp.tmc, holding: kp.tmc >= TARGET_KPI.tmc },
+          { metric: 'exits_pct', target: TARGET_KPI.exits, current: kp.exits, holding: kp.exits >= TARGET_KPI.exits },
+          { metric: 'curator_index_pct', target: calF.curatorThreshold, current: Math.round(kp.curatorIndex * 10) / 10, holding: kp.curatorIndex >= calF.curatorThreshold },
+          { metric: 'contribution_rub_per_order', target: 0, current: Math.round(kp.contribution * 10) / 10, holding: kp.contribution >= 0 }
+        ];
+      })(),
+      fill_plan: gaps,
       data_provenance: {
         state_version: state.stateVersion || STATE_VERSION,
         saved_model_version: state.modelVersionSaved || null,

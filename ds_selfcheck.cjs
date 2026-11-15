@@ -5,7 +5,7 @@ if (!m) throw new Error('no <script> block');
 let js = m[1];
 const idx = js.lastIndexOf('})();');
 if (idx < 0) throw new Error('no IIFE end');
-js = js.slice(0, idx) + '\n  globalThis.__t = { buildPrompt: buildPrompt, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, applyStrategy: applyStrategy, buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, runs: runs, evaluations: evaluations, expectedOf: expectedOf, profitForWeek: profitForWeek, norm: fieldValueNorm, quality: calcQualityScore, setWeek: function (x) { currentWeek = x; }, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, curatorWeights: CURATOR_WEIGHTS, breakeven: breakevenOf, breakevenAtKpi: breakevenAtTargetKpi, dataQuality: dataQualityOf, projectQuality: projectDataQuality, gatesFor: gatesFor, load: load, save: save, migrateState: migrateState, detectStateVersion: detectStateVersion, modelOlderThan: modelOlderThan, applyState: applyState, markWeekReviewed: markWeekReviewed, weeksNeedingReview: weeksNeedingReview, normalizeBenchmarks: normalizeBenchmarks, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, applyBenchmarks: applyBenchmarks, benchmarkMetrics: BENCHMARK_METRICS, stateVersion: function () { return { STATE_VERSION: STATE_VERSION, KEY: KEY, LEGACY_KEYS: LEGACY_KEYS, BACKUP_PREFIX: BACKUP_PREFIX }; }, weightedCost: calcWeightedCost, validateZiz: validateZiz };\n' + js.slice(idx);
+js = js.slice(0, idx) + '\n  globalThis.__t = { buildPrompt: buildPrompt, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, applyStrategy: applyStrategy, buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, runs: runs, evaluations: evaluations, expectedOf: expectedOf, profitForWeek: profitForWeek, norm: fieldValueNorm, quality: calcQualityScore, setWeek: function (x) { currentWeek = x; }, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, curatorWeights: CURATOR_WEIGHTS, breakeven: breakevenOf, breakevenAtKpi: breakevenAtTargetKpi, dataQuality: dataQualityOf, projectQuality: projectDataQuality, gatesFor: gatesFor, lossWeights: lossWeightsCheck, metricJumps: metricJumps, prefillZones: prefillZones, load: load, save: save, migrateState: migrateState, detectStateVersion: detectStateVersion, modelOlderThan: modelOlderThan, applyState: applyState, markWeekReviewed: markWeekReviewed, weeksNeedingReview: weeksNeedingReview, normalizeBenchmarks: normalizeBenchmarks, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, applyBenchmarks: applyBenchmarks, benchmarkMetrics: BENCHMARK_METRICS, stateVersion: function () { return { STATE_VERSION: STATE_VERSION, KEY: KEY, LEGACY_KEYS: LEGACY_KEYS, BACKUP_PREFIX: BACKUP_PREFIX }; }, weightedCost: calcWeightedCost, validateZiz: validateZiz };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -240,11 +240,11 @@ const FULL_W1 = {
 };
 const FULL = {
   1: FULL_W1,
-  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160 },
-  3: { lateness3: 7, appeals3: 6, exits3: 93, tmc3: 95, cost3: 160 },
-  4: { lateness4: 6.5, appeals4: 5.5, exits4: 94, tmc4: 97, cost4: 165 },
-  5: { lateness5: 6, appeals5: 5, tmc5: 98, exits5: 96, cost5: 165, curatorAutonomy5: 75, curatorKpi5: 70, curatorTraining5: 80, curatorInvolvement5: 70 },
-  6: { lateness6: 6, appeals6: 4, tmc6: 100, exits6: 95, cost6: 165, curatorAutonomy6: 90, curatorKpi6: 90, curatorTraining6: 90, curatorInvolvement6: 90, finalPlan: 'Держать KPI' }
+  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160, curatorProcess2: 90, curatorAutonomy2: 85, curatorKpi2: 80, curatorTraining2: 90, curatorInvolvement2: 85 },
+  3: { lateness3: 7, appeals3: 6, exits3: 93, tmc3: 95, cost3: 160, curatorProcess3: 90, curatorAutonomy3: 88, curatorKpi3: 85, curatorTraining3: 90, curatorInvolvement3: 88 },
+  4: { lateness4: 6.5, appeals4: 5.5, exits4: 94, tmc4: 97, cost4: 165, curatorProcess4: 90, curatorAutonomy4: 90, curatorKpi4: 88, curatorTraining4: 92, curatorInvolvement4: 90 },
+  5: { lateness5: 6, appeals5: 5, tmc5: 98, exits5: 96, cost5: 165, curatorProcess5: 90, curatorAutonomy5: 75, curatorKpi5: 70, curatorTraining5: 80, curatorInvolvement5: 70 },
+  6: { lateness6: 6, appeals6: 4, tmc6: 100, exits6: 95, cost6: 165, curatorProcess6: 90, curatorAutonomy6: 90, curatorKpi6: 90, curatorTraining6: 90, curatorInvolvement6: 90, finalPlan: 'Держать KPI' }
 };
 
 t.buildState({ 1: { done: ['a'], slots: ['8–20'], tmcMissing: ['сумка'], lateCauses: ['пробки'], appealCauses: ['опоздания'] } });
@@ -401,13 +401,13 @@ assert(t.buildPrompt(6).includes('Безубыточность при целев
 assert(t.buildPrompt(1).includes('не придумывай'), 'в промпте есть запрет придумывать целевые числа');
 
 // ---------- инкремент 5: measured, data_quality и [Н/Д] в гейтах ----------
-assert(summaryFull.data_quality && summaryFull.data_quality.score === 0.93, 'качество данных проекта 0.93 (куратор на Н2–Н4 и ТМЦ на Н2 унаследованы), got ' + (summaryFull.data_quality && summaryFull.data_quality.score));
-assert(summaryFull.data_quality.issues.length === 5, 'в качестве данных перечислены 5 недель с неполными измерениями (got ' + summaryFull.data_quality.issues.length + ')');
+assert(summaryFull.data_quality && summaryFull.data_quality.score === 0.98, 'качество данных проекта 0.97 (ТМЦ на Н2 и процессы куратора унаследованы), got ' + (summaryFull.data_quality && summaryFull.data_quality.score));
+assert(summaryFull.data_quality.issues.length === 1, 'в качестве данных осталась 1 неделя с неполными измерениями (got ' + summaryFull.data_quality.issues.length + ')');
 assert(summaryFull.data_quality.issues.some(x => x.indexOf('Н2') === 0 && x.indexOf('ТМЦ') !== -1), 'неделя 2: в причинах есть унаследованный ТМЦ');
 const w3q = summaryFull.weeks.find(w => w.week === 3);
-assert(w3q.measured && w3q.measured.curator === false && w3q.measured.lateness === true, 'неделя 3: опоздания измерены, куратор — нет');
-assert(w3q.measured_key_metrics === '4/5', 'неделя 3: измерено 4 из 5 ключевых метрик (got ' + w3q.measured_key_metrics + ')');
-assert(w3q.data_quality.score === 0.9 && w3q.data_quality.issues.some(x => x.indexOf('Куратор') === 0), 'неделя 3: качество 0.9 с причиной по куратору');
+assert(w3q.measured && w3q.measured.curator === true && w3q.measured.lateness === true, 'неделя 3: куратор теперь измеряется (4 из 5 компонент)');
+assert(w3q.measured_key_metrics === '5/5', 'неделя 3: измерены все 5 ключевых метрик (got ' + w3q.measured_key_metrics + ')');
+assert(w3q.data_quality.score === 1 && w3q.data_quality.issues.length === 0, 'неделя 3: качество 1 — куратор измеряется целиком');
 const w6q = summaryFull.weeks.find(w => w.week === 6);
 assert(w6q.measured.curator === true, 'неделя 6: куратор считается измеренным (4 из 5 компонент)');
 assert(w6q.curator_components_entered === 4 && w6q.data_quality.score === 0.98, 'неделя 6: 4 из 5 компонент куратора -> качество 0.98 (got ' + w6q.data_quality.score + ')');
@@ -417,19 +417,20 @@ assert(t.buildPrompt(3).includes('| Качество |'), 'в промпте е�
 assert(t.buildPrompt(3).includes('Качество данных: введено = 1'), 'в промпте объяснена шкала качества');
 assert(t.buildPrompt(3).includes('Недели с качеством < 0.8'), 'в промпте есть порог качества для тренда');
 
-// гейты по неделе без полей куратора: строка [Н/Д] и не входит в итог
-t.buildState(JSON.parse(JSON.stringify({ 1: FULL[1], 2: FULL[2], 3: FULL[3], 4: FULL[4] })));
-t.setWeek(4);
+// гейты по неизмеренной метрике: у недели 2 нет своего ТМЦ (наследуется из недели 1) → [Н/Д] и не входит в итог
+t.buildState(JSON.parse(JSON.stringify({ 1: FULL[1], 2: FULL[2] })));
+t.setWeek(2);
 const repW4 = t.buildFinalReport();
 const sumW4 = JSON.parse(repW4.slice(repW4.indexOf('{\n  "model_version"'), repW4.indexOf('\n\n## 7.')));
-const gCur = sumW4.gates.find(g => g.name.indexOf('куратор') === 0);
-assert(gCur && gCur.measured === false && gCur.ok === null, 'гейт куратора на неделе 4 помечен неизмеренным');
-assert(repW4.includes('[Н/Д] куратор'), 'в отчёте гейт куратора = [Н/Д]');
+assert(sumW4.gates_week === 2, 'гейты считаются по последней полной неделе (2)');
+const gTmc = sumW4.gates.find(g => g.name.indexOf('ТМЦ') === 0);
+assert(gTmc && gTmc.measured === false && gTmc.ok === null, 'гейт ТМЦ помечен неизмеренным (значение из недели 1)');
+assert(repW4.includes('[Н/Д] ТМЦ'), 'в отчёте гейт ТМЦ = [Н/Д]');
 assert(sumW4.gates_measured < sumW4.gates_total, 'часть гейтов не измерена (' + sumW4.gates_measured + '/' + sumW4.gates_total + ')');
 assert(sumW4.gates_passed === sumW4.gates.filter(g => g.measured).every(g => g.ok), 'gates_passed не учитывает [Н/Д]');
 assert(sumW4.gates_note.length > 0, 'в сводке объяснено, почему [Н/Д] не входит в итог');
 assert(repW4.includes('в итог не входит'), 'в тексте отчёта объяснена пометка [Н/Д]');
-assert(sumW4.weeks.find(w => w.week === 4).data_quality.score === 0.9, 'неделя 4: качество данных 0.9 (got ' + sumW4.weeks.find(w => w.week === 4).data_quality.score + ')');
+assert(sumW4.weeks.find(w => w.week === 2).data_quality.score === 0.9, 'неделя 2: качество 0.9 (ТМЦ унаследован), got ' + sumW4.weeks.find(w => w.week === 2).data_quality.score);
 
 // пустая неделя: качество 0, отдельная причина
 t.buildState({ 1: FULL[1] });
@@ -437,10 +438,10 @@ assert(t.dataQuality(3).score === 0, 'пустая неделя: качеств�
 assert(t.dataQuality(3).issues[0].indexOf('не заполнена') !== -1, 'пустая неделя: причина «не заполнена»');
 
 // старое сохранение: метрика недели лежит без суффикса — полнота и качество трактуют одинаково
-t.buildState({ 1: Object.assign({}, FULL[1], { tmc: '32' }), 2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160, tmc: '76' } });
-assert(t.coverage(2).required === 7, 'при ТМЦ Н1 < 100 неделя 2 требует tmc2 (got ' + t.coverage(2).required + ')');
+t.buildState({ 1: Object.assign({}, FULL[1], { tmc: '32' }), 2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160, tmc: '76', curatorProcess2: 90, curatorAutonomy2: 85, curatorKpi2: 80, curatorTraining2: 90, curatorInvolvement2: 85 } });
+assert(t.coverage(2).required === 12, 'при ТМЦ Н1 < 100 неделя 2 требует tmc2 и куратора: 12 полей (got ' + t.coverage(2).required + ')');
 assert(t.metricSource(2, 'tmc') === 'entered' && t.complete(2) === true, 'метрика без суффикса считается измеренной и заполненной');
-assert(t.dataQuality(2).score === 0.9, 'качество недели 2 = 0.9 (ТМЦ введён через старое поле, куратор унаследован), got ' + t.dataQuality(2).score);
+assert(t.dataQuality(2).score === 1, 'качество недели 2 = 1 (ТМЦ через старое поле, куратор измерен), got ' + t.dataQuality(2).score);
 
 // ---------- инкремент 6: миграция сохранений ----------
 const V = t.stateVersion();
@@ -815,5 +816,71 @@ assert(Math.abs(sumRate.breakeven_at_target_kpi.breakeven_margin_rub - 733.3) < 
 assert(t.buildFinalReport().includes('и ставке 110 ₽'), 'в отчёте указано, по какой ставке считалась безубыточность');
 assert(t.buildPrompt(6).includes('и ставке 110 ₽'), 'в промпте указана ставка расчёта');
 assert(t.buildFinalReport().includes('куратор ≥57% (индекс готовности)'), 'в целях Н7–Н9 порог куратора из калибровки');
+
+// ---------- инкремент 11: поддержка пяти шагов (веса, скачки, куратор Н2–Н4, Зисы, «что держим») ----------
+// шаг 1: сверка весов потерь
+t.buildState(JSON.parse(JSON.stringify(FULL)));
+t.setWeek(6);
+assert(t.lossWeights(null, t.profitForWeek(6)) === null, 'при дефолтных весах проверка калибровки не срабатывает');
+const heavyW = JSON.parse(JSON.stringify(FULL));
+heavyW[1].kL = '5'; heavyW[1].kA = '5'; heavyW[1].kT = '3.6'; heavyW[1].kE = '5';
+t.buildState(heavyW);
+t.setWeek(6);
+const lwH = t.lossWeights(null, t.profitForWeek(6));
+assert(lwH && lwH.overweighted.length === 4, 'все четыре веса помечены как завышенные (got ' + (lwH && lwH.overweighted.length) + ')');
+assert(lwH.ratios.kL === 10 && lwH.ratios.kE === 16.7, 'отношения к дефолтам: kL ×10, kE ×16,7 (got ' + lwH.ratios.kL + ', ' + lwH.ratios.kE + ')');
+assert(lwH.at_defaults.required_margin_rub != null && lwH.at_defaults.required_margin_rub < 250, 'при дефолтных весах безубыточная маржа резко ниже (got ' + lwH.at_defaults.required_margin_rub + ')');
+const repLW = t.buildFinalReport();
+assert(repLW.includes('### Веса потерь'), 'в отчёте есть таблица весов');
+assert(repLW.includes('| kL — опоздания | 5% | 0.5% | ×10 |'), 'в таблице весов есть отношение к дефолту');
+assert(repLW.includes('Безубыточная маржа при дефолтных весах'), 'в отчёте показано «что было бы при дефолтах»');
+const sumLW = JSON.parse(repLW.slice(repLW.indexOf('{\n  "model_version"'), repLW.indexOf('\n\n## 7.')));
+assert(sumLW.loss_weights_check.status === 'overweighted' && sumLW.loss_weights_check.ratios.kE === 16.7, 'в сводке статус overweighted и отношения');
+assert(t.buildPrompt(6).includes('### 4.4. Проверка калибровки весов'), 'в промпте есть блок проверки весов');
+assert(t.buildPrompt(6).includes('При дефолтных весах безубыточная маржа была бы'), 'в промпте «что было бы при дефолтах»');
+
+// шаг 2: скачки метрик — реальный срыв или артефакт ввода
+const jumpState = JSON.parse(JSON.stringify(FULL));
+jumpState[5].lateness5 = 5.5;
+jumpState[6].lateness6 = 30;
+t.buildState(jumpState);
+t.setWeek(6);
+const jumps = t.metricJumps(6);
+const jl = jumps.find(j => j.metric === 'lateness');
+assert(!!jl && jl.from === 5.5 && jl.to === 30 && jl.at_edge === true, 'скачок опозданий 5,5 → 30 с краем шкалы помечен (got ' + JSON.stringify(jl) + ')');
+assert(t.buildFinalReport().includes('### Скачки метрик'), 'в отчёте есть блок скачков');
+assert(t.buildFinalReport().includes('Н6: Опоздания: 5.5% → 30%'), 'скачок недели 6 попал в отчёт');
+assert(t.buildPrompt(6).includes('### 4.5. Скачки метрик'), 'в промпте есть блок скачков');
+assert(t.buildPrompt(6).includes('не делай выводов, пока причина не подтверждена'), 'в промпте правило про скачки');
+const sumJump = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
+assert(sumJump.metric_jumps.length >= 1 && /Н6/.test(sumJump.metric_jumps[0]), 'в сводке список скачков');
+
+// шаг 5: что держим — не допускать регресса
+const keepRep = t.buildFinalReport();
+assert(keepRep.includes('## 4.4. Что держим'), 'в отчёте есть блок «что держим»');
+assert(keepRep.includes('[ДЕРЖИМ]'), 'есть метрики, которые уже в цели');
+assert(/\[ВЫТЯГИВАЕМ\] опоздания/.test(keepRep), 'опоздания 30% помечены как «вытягиваем»');
+assert(t.buildPrompt(6).includes('### 4.6. Что держим'), 'в промпте есть блок «что держим»');
+assert(t.buildPrompt(6).includes('не должны ухудшать'), 'в промпте правило о недопущении регресса');
+assert(sumJump.keep_targets.some(k => k.metric === 'tmc_pct' && k.holding === true), 'в сводке ТМЦ помечен как «держим»');
+assert(sumJump.keep_targets.some(k => k.metric === 'lateness_pct' && k.holding === false), 'в сводке опоздания помечены как «вытягиваем»');
+
+// шаг 3-4: план дозаполнения (метрики недель, таблица Зисов, бенчмарки)
+const fillState = JSON.parse(JSON.stringify(FULL));
+delete fillState[6].tmc6;
+t.buildState(fillState);
+t.setWeek(6);
+const fillRep = t.buildFinalReport();
+assert(fillRep.includes('### План дозаполнения'), 'в отчёте есть план дозаполнения');
+assert(/Н6 \(качество [\d.]+\)/.test(fillRep), 'в плане перечислена неделя 6');
+assert(fillRep.includes('Таблица Зисов не заполнена'), 'в плане отмечена незаполненная таблица Зисов');
+assert(fillRep.includes('Бенчмарки рынка не подключены'), 'в плане отмечены бенчмарки');
+const sumFill = JSON.parse(fillRep.slice(fillRep.indexOf('{\n  "model_version"'), fillRep.indexOf('\n\n## 7.')));
+assert(sumFill.fill_plan.length >= 3, 'в сводке план дозаполнения (got ' + sumFill.fill_plan.length + ')');
+
+// куратор измеряется каждую неделю: Н2 — 10 обязательных полей (11, если ТМЦ Н1 < 100), Н3–Н4 — 9
+assert(t.coverage(2).required === 11, 'неделя 2 требует 11 полей, включая куратора (got ' + t.coverage(2).required + ')');
+assert(t.coverage(3).required === 10, 'неделя 3 требует 10 полей, включая куратора (got ' + t.coverage(3).required + ')');
+assert(t.coverage(4).required === 10, 'неделя 4 требует 10 полей, включая куратора (got ' + t.coverage(4).required + ')');
 
 console.log('\nDONE');
