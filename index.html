@@ -98,6 +98,16 @@
   .badge.neg { background:#fee4e2; color:var(--warn); }
   .badge.pos { background:#dcfae6; color:var(--good); }
   .econ-warn { margin-top:10px; padding:10px 12px; border-radius:10px; border-left:4px solid var(--warn); background:#fff5f4; color:var(--warn); font-size:13px; font-weight:600; }
+  #zoneTableWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .zone-table { width:100%; min-width:720px; border-collapse:collapse; font-size:13px; }
+  .zone-table th { text-align:left; padding:6px 4px; border-bottom:2px solid var(--line); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .zone-table td { padding:4px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .zone-table .z-in { width:74px; height:44px; padding:0 6px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  .zone-table .z-in.rate-bad { border-color:#b42318; background:#fff5f4; }
+  .zone-table .z-warn { font-size:12px; color:var(--muted); max-width:220px; }
+  .zone-table .z-warn.neg { color:#b42318; font-weight:600; }
+  .zone-table .z-warn.warn { color:var(--warn); font-weight:600; }
+  .zone-table .z-del { height:44px; min-width:44px; padding:0 8px; }
   #result { min-height:260px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
   #aiReport { min-height:320px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
   #promptOut, #finalOut { min-height:240px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
@@ -258,6 +268,49 @@
   var weekHint = document.getElementById('weekHint');
   var chartsEl = document.getElementById('charts');
 
+  // ---------- тарифы по Зисам ----------
+  var ZIS_MIN_RATE = 100, ZIS_MAX_RATE = 180;
+  var ZIS_MAX_ORDERS = 250, ZIS_MAX_COURIERS = 5;
+  var ZIS_COMPLEX_ORDERS = 180; // < этого — «сложная зона»
+
+  // Заполнена ли таблица Зисов: она задаёт и объём заказов, и средневзвешенную ставку
+  function zonesFilled(w) {
+    var z = (weekData(w || 1) || {}).zones;
+    return !!(z && Array.isArray(z) && z.length);
+  }
+  function zonesOrdersTotal(zones) {
+    var sum = 0;
+    (zones || []).forEach(function (z) { sum += num(z.orders) || 0; });
+    return sum;
+  }
+
+  // Расчёт средневзвешенной ставки курьера по таблице зизов
+  function calcWeightedCost(zones) {
+    if (!zones || !Array.isArray(zones) || zones.length === 0) return null;
+    var totalOrders = 0, totalCost = 0;
+    zones.forEach(function (z) {
+      var orders = num(z.orders) || 0;
+      var rate = num(z.rate) || 0;
+      totalOrders += orders;
+      totalCost += orders * rate;
+    });
+    return totalOrders > 0 ? Math.round(totalCost / totalOrders * 10) / 10 : null;
+  }
+
+  // Валидация зиза: предупреждения о границах
+  function validateZiz(z) {
+    var warnings = [];
+    var orders = num(z.orders) || 0;
+    var couriers = num(z.couriers) || 0;
+    var rate = num(z.rate) || 0;
+    if (orders > ZIS_MAX_ORDERS) warnings.push('превышен лимит зиза: ' + orders + ' заказов (макс. ' + ZIS_MAX_ORDERS + ')');
+    if (couriers > ZIS_MAX_COURIERS) warnings.push('лишние курьеры: ' + (couriers - ZIS_MAX_COURIERS) + ' (отключить)');
+    if (orders > 0 && orders < ZIS_COMPLEX_ORDERS) warnings.push('сложная зона');
+    if (rate < ZIS_MIN_RATE) warnings.push('ставка ниже диапазона (мин. ' + ZIS_MIN_RATE + ' ₽)');
+    if (rate > ZIS_MAX_RATE) warnings.push('ставка выше диапазона (макс. ' + ZIS_MAX_RATE + ' ₽)');
+    return warnings;
+  }
+
   // ---------- веса полей ----------
   var FIELD_WEIGHTS = {
     dsName:1, curatorName:1, date:1, blocker:2, slots:2, gray:2, done:2,
@@ -281,7 +334,9 @@
     // модель 1.3.0: обучение и вовлечённость куратора влияют на маржу через потери
     kC:3, curatorTraining:3, curatorInvolvement:3, targetProfitPerOrder:2,
     exits5:4, cost5:3, curatorTraining5:3, curatorInvolvement5:3,
-    cost6:3, curatorTraining6:3, curatorInvolvement6:3
+    cost6:3, curatorTraining6:3, curatorInvolvement6:3,
+    // новые поля: тарифы по зизам и комментарии куратора
+    zones:4, curatorNotes1:2, curatorNotes2:2, curatorNotes3:2, curatorNotes4:2, curatorNotes5:2, curatorNotes6:2
   };
 
   function fieldMax(id) {
@@ -358,8 +413,13 @@
     5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
     6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
   };
+  // Поля комментариев куратора по каждой неделе
+  // Комментарии куратора по выходам: свой id на каждую неделю (curatorComment занят планом по куратору)
+  var CURATOR_NOTE_FIELDS = { 1: 'curatorNotes1', 2: 'curatorNotes2', 3: 'curatorNotes3', 4: 'curatorNotes4', 5: 'curatorNotes5', 6: 'curatorNotes6' };
   function requiredFields(w) {
     var list = (REQUIRED_BASE[w] || []).slice();
+    // При заполненной таблице Зисов объём берётся из неё, слайдеры количества Зисов и заказов на Зис не обязательны
+    if (w === 1 && zonesFilled(1)) list = list.filter(function (id) { return id !== 'zonesCount' && id !== 'ordersPerZoneDay'; });
     if (w === 2 && num(weekData(1).tmc) < 100) list.push('tmc2'); // условное поле: показывается только при ТМЦ < 100%
     return list;
   }
@@ -810,7 +870,7 @@
   // ---------- калибровка ----------
   function calibration() {
     var d = weekData(1);
-    return {
+    var cal = {
       zonesCount: num(d.zonesCount) || 6,
       ordersPerZoneDay: num(d.ordersPerZoneDay) || 220,
       price: num(d.cost) || 600,
@@ -825,6 +885,21 @@
       curatorPenaltyPct: d.curatorPenaltyPct !== undefined ? num(d.curatorPenaltyPct) : 5,
       targetProfitPerOrder: d.targetProfitPerOrder !== undefined ? num(d.targetProfitPerOrder) : 20
     };
+    // Если есть таблица Зисов — она задаёт и объём заказов, и средневзвешенную ставку
+    var zones = d.zones;
+    if (zones && Array.isArray(zones) && zones.length > 0) {
+      var wc = calcWeightedCost(zones);
+      if (wc != null && wc > 0) cal.courierCost = wc;
+      var ordersFromZones = zonesOrdersTotal(zones);
+      if (ordersFromZones > 0) {
+        cal.zonesCount = zones.length;
+        cal.ordersPerZoneDay = Math.round(ordersFromZones / zones.length);
+        cal.ordersPerDay = ordersFromZones;
+        cal.ordersFromZones = true;
+      }
+    }
+    if (cal.ordersPerDay == null) cal.ordersPerDay = cal.zonesCount * cal.ordersPerZoneDay;
+    return cal;
   }
 
   // ---------- прибыль ----------
@@ -836,11 +911,23 @@
 
   function calcProfitDetail(d, cal) {
     cal = cal || calibration();
-    var zones = num(d.zonesCount) || cal.zonesCount;
+    // Число Зисов: при заполненной таблице — по таблице, иначе слайдер/калибровка
+    var zonesList = (d.zones && Array.isArray(d.zones) && d.zones.length) ? d.zones : null;
+    var zones = zonesList ? zonesList.length : (num(d.zonesCount) || cal.zonesCount);
     var perZoneDay = num(d.ordersPerZoneDay) || cal.ordersPerZoneDay;
-    var Q = zones * perZoneDay;
+    // Объём заказов: явный объём недели (zoneOrders2..6) → сумма по таблице Зисов → слайдеры калибровки
+    var zonesOrders = zonesList ? zonesOrdersTotal(zonesList) : 0;
+    var weekZoneOrders = (d.__weekZoneOrders != null && d.__weekZoneOrders > 0) ? d.__weekZoneOrders : null;
+    var Q, ordersSource;
+    if (weekZoneOrders != null) { Q = zones * weekZoneOrders; ordersSource = 'week_override'; }
+    else if (zonesOrders > 0) { Q = zonesOrders; ordersSource = 'zones'; }
+    else { Q = zones * perZoneDay; ordersSource = 'sliders'; }
     var price = num(d.cost) || cal.price;                 // средний чек заказа, ₽
-    var rate = num(d.courierCost) || cal.courierCost;     // ставка курьеру за заказ, ₽
+    // Ставка курьеру: приоритет — явная ставка недели (cost2..cost6), затем средневзвешенная по таблице Зисов,
+    // затем ставка из калибровки. Таблица Зисов — источник тарифа, слайдер courierCost работает как запасной вариант.
+    var zonesRate = (d.zones && Array.isArray(d.zones) && d.zones.length) ? calcWeightedCost(d.zones) : null;
+    var rate = d.__weekRate ? num(d.courierCost)
+      : (zonesRate != null ? zonesRate : (num(d.courierCost) || cal.courierCost));
     var marginPct = d.marginPct !== undefined ? num(d.marginPct) : cal.marginPct;
     var M = price * marginPct / 100;                      // маржа даркстора с заказа до доставки, ₽
     var revenue = Q * M;
@@ -876,6 +963,16 @@
     // Ненулевой остаток означает, что отчёт не сходится с моделью (другая версия или ручная правка чисел).
     var structural = revenue - courierPay;                 // вклад объёма: заказы × вклад с заказа
     var residual = profit - (structural - baseLoss - lossCurator - curatorPenaltyAmount);
+    // Курьеры сверх нормы (Зис > 5 курьеров): лишний курьер не берёт слот, но оплата — за заказ,
+    // поэтому на прибыль это НЕ влияет отдельной формулой (ответ заказчика: наказание влияет через метрики).
+    // Считаем только счётчик для предупреждения и отчёта.
+    var extraCouriers = 0;
+    if (d.zones && Array.isArray(d.zones)) {
+      d.zones.forEach(function (z) {
+        var couriers = num(z.couriers) || 0;
+        if (couriers > ZIS_MAX_COURIERS) extraCouriers += couriers - ZIS_MAX_COURIERS;
+      });
+    }
     return { Q:Q, price:price, rate:rate, cost:rate, contribution:contribution, marginPct:marginPct, M:M, revenue:revenue, courierPay:courierPay,
       negativeUnit: contribution <= 0,
       lateness:lateness, appeals:appeals, tmc:tmc, exits:exits,
@@ -884,6 +981,7 @@
       curatorProcess:cProcess, curatorAutonomy:cAutonomy, curatorKpi:cKpi, curatorTraining:cTraining, curatorInvolvement:cInvolve,
       curatorPenalty:curatorPenalty, curatorPenaltyAmount:curatorPenaltyAmount,
       structural:structural, residual:residual,
+      extraCouriers:extraCouriers, ordersSource:ordersSource,
       profitBefore:Math.round(profitBefore), profit:Math.round(profit) };
   }
   function mergedForWeek(w) {
@@ -896,7 +994,8 @@
       if (d[key] != null) merged[k] = d[key];
       else if (d[k] != null) merged[k] = d[k];
     });
-    if (w > 1 && d['cost' + w] != null) merged.courierCost = num(d['cost' + w]);
+    if (w > 1 && d['cost' + w] != null) { merged.courierCost = num(d['cost' + w]); merged.__weekRate = true; }
+    if (w > 1 && d['zoneOrders' + w] != null) merged.__weekZoneOrders = num(d['zoneOrders' + w]);
     return merged;
   }
   function profitForWeek(w) {
@@ -998,6 +1097,11 @@
     if (econBroken) issues.push(pCur.contribution <= 0
       ? 'экономика заказа отрицательная (вклад ' + rub(pCur.contribution) + ')'
       : 'прибыль отрицательная (' + rub(pCur.profit) + '/день)');
+    // Проверка диапазона ставки
+    var rate = pCur ? pCur.rate : (calibration().courierCost || 0);
+    if (rate < ZIS_MIN_RATE || rate > ZIS_MAX_RATE) {
+      issues.push('ставка ' + Math.round(rate) + ' ₽ вне диапазона ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽');
+    }
     if (issues.length) {
       bar.className = econBroken ? '' : 'warn';
       statusEl.className = 'status ' + (econBroken ? 'low' : 'mid');
@@ -1136,7 +1240,7 @@
       });
     });
     var labels = {
-      1:'Диагностика, калибровка модели, метрики.',
+      1:'Диагностика, калибровка модели, тарифы по Зисам, метрики.',
       2:'Запуск Зисов и слотов, новые ставки, закрытие открытых пунктов.',
       3:'Курьер под ключ, Telegram-группы, динамика метрик.',
       4:'Стабилизация слотов и тарифов, работа с отклонениями.',
@@ -1183,6 +1287,97 @@
   }
   function adaptive(id, label, content) {
     return '<div class="adaptive" id="' + id + '"><span class="label">' + esc(label) + '</span>' + content + '</div>';
+  }
+
+  // ---------- таблица Зисов ----------
+  function zoneWarnHtml(z) {
+    var warns = validateZiz(z);
+    var cls = warns.length ? (warns.some(function (x) { return x.indexOf('лишние') === 0 || x.indexOf('ставка') === 0; }) ? 'neg' : 'warn') : '';
+    return { cls: cls, text: warns.length ? warns.join('; ') : '—', warns: warns };
+  }
+
+  function zoneSummaryHtml(zones) {
+    var wc = calcWeightedCost(zones);
+    var extra = 0;
+    zones.forEach(function (z) { var c = num(z.couriers) || 0; if (c > ZIS_MAX_COURIERS) extra += c - ZIS_MAX_COURIERS; });
+    return 'Средневзвешенная ставка: <b>' + (wc != null ? wc + ' ₽' : '—') + '</b> по заказам — используется в расчёте прибыли' +
+      (extra ? '; курьеров сверх нормы: <b>' + extra + '</b> — отключаются (на прибыль не влияют, эффект через метрики)' : '') + '.';
+  }
+
+  // Пересчитывает прибыль, сводку и отчёты после правки таблицы (без перерисовки самой таблицы)
+  function refreshAfterZoneChange() {
+    var block = document.getElementById('profitBlock');
+    if (block) {
+      var p = profitForWeek(currentWeek);
+      if (p) block.innerHTML = profitBlockHtml(p, calibration(), currentWeek > 1 ? profitForWeek(currentWeek - 1) : null);
+    }
+    updateResult(); updateAiReport(); updateLiveBar();
+  }
+
+  function renderZoneTable() {
+    var wrap = document.getElementById('zoneTableWrap');
+    if (!wrap) return;
+    var zones = getAnswer('zones') || [];
+    var h = '';
+    if (!zones.length) {
+      h = '<div class="hint">Зисов пока нет — нажмите «+ Добавить Зис». Пока таблица пуста, используется ставка из калибровки.</div>';
+    } else {
+      h += '<table class="zone-table"><thead><tr>' +
+        '<th>№</th><th>Км</th><th>Заказов/день</th><th>Ходка, мин</th><th>Возврат, мин</th><th>Ставка, ₽</th><th>Курьеров</th><th>Предупреждения</th><th></th></tr></thead><tbody>';
+      zones.forEach(function (z, i) {
+        var w = zoneWarnHtml(z);
+        h += '<tr data-zrow="' + i + '">' +
+          '<td>' + (i + 1) + '</td>' +
+          '<td><input type="text" class="z-in" data-ziz="' + i + '" data-zfield="km" value="' + esc(z.km != null ? z.km : '') + '" placeholder="км"></td>' +
+          '<td><input type="text" class="z-in" data-ziz="' + i + '" data-zfield="orders" value="' + esc(z.orders != null ? z.orders : '') + '" placeholder="заказов"></td>' +
+          '<td><input type="text" class="z-in" data-ziz="' + i + '" data-zfield="tripTime" value="' + esc(z.tripTime != null ? z.tripTime : '') + '" placeholder="мин"></td>' +
+          '<td><input type="text" class="z-in" data-ziz="' + i + '" data-zfield="returnTime" value="' + esc(z.returnTime != null ? z.returnTime : '') + '" placeholder="мин"></td>' +
+          '<td><input type="text" class="z-in' + (w.warns.some(function (x) { return x.indexOf('ставка') === 0; }) ? ' rate-bad' : '') + '" data-ziz="' + i + '" data-zfield="rate" value="' + esc(z.rate != null ? z.rate : '') + '" placeholder="100–180"></td>' +
+          '<td><input type="text" class="z-in" data-ziz="' + i + '" data-zfield="couriers" value="' + esc(z.couriers != null ? z.couriers : '') + '" placeholder="чел"></td>' +
+          '<td class="z-warn ' + w.cls + '" data-zwarn="' + i + '">' + esc(w.text) + '</td>' +
+          '<td><button type="button" class="mini-btn z-del" data-ziz="' + i + '">−</button></td></tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div class="hint" style="margin-top:8px;" id="zoneSummary">' + zoneSummaryHtml(zones) + '</div>';
+    }
+    wrap.innerHTML = h;
+
+    wrap.querySelectorAll('.z-in').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var zs = (getAnswer('zones') || []).slice();
+        var i = parseInt(inp.getAttribute('data-ziz'), 10);
+        var f = inp.getAttribute('data-zfield');
+        if (!zs[i]) return;
+        zs[i] = Object.assign({}, zs[i]);
+        zs[i][f] = inp.value === '' ? null : parseFloat(inp.value.replace(',', '.'));
+        setAnswer('zones', zs); save();
+        // Обновляем только предупреждения строки и сводку, чтобы не терять фокус в поле
+        var w = zoneWarnHtml(zs[i]);
+        var cell = wrap.querySelector('[data-zwarn="' + i + '"]');
+        if (cell) { cell.textContent = w.text; cell.className = 'z-warn ' + w.cls; }
+        if (f === 'rate') inp.className = 'z-in' + (w.warns.some(function (x) { return x.indexOf('ставка') === 0; }) ? ' rate-bad' : '');
+        var sum = document.getElementById('zoneSummary');
+        if (sum) sum.innerHTML = zoneSummaryHtml(zs);
+        refreshAfterZoneChange();
+      });
+    });
+    wrap.querySelectorAll('.z-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var zs = (getAnswer('zones') || []).slice();
+        zs.splice(parseInt(btn.getAttribute('data-ziz'), 10), 1);
+        setAnswer('zones', zs.length ? zs : null); save();
+        renderZoneTable();
+        refreshAfterZoneChange();
+      });
+    });
+  }
+
+  function addZone() {
+    var zs = (getAnswer('zones') || []).slice();
+    zs.push({ km: null, orders: null, tripTime: null, returnTime: null, rate: null, couriers: null });
+    setAnswer('zones', zs); save();
+    renderZoneTable();
+    refreshAfterZoneChange();
   }
 
   function renderDeltas() {
@@ -1282,8 +1477,8 @@
 
       h += '<div class="card"><h2>Неделя 1. Калибровка модели прибыли</h2>';
       h += '<div class="hint" style="margin-bottom:8px;">Эти параметры используются во всех расчётах. Меняйте под фактические данные даркстора.</div>';
-      h += fieldSlider('zonesCount', 'Количество Зисов', 1, 30, 1, 6, '');
-      h += fieldSlider('ordersPerZoneDay', 'Заказов в день на Зис', 50, 400, 5, 220, '');
+      h += fieldSlider('zonesCount', 'Количество Зисов', 1, 30, 1, 6, 'Используется, если таблица Зисов пуста');
+      h += fieldSlider('ordersPerZoneDay', 'Заказов в день на Зис', 50, 400, 5, 220, 'Используется, если таблица Зисов пуста');
       h += fieldSlider('cost', 'Средний чек заказа, руб.', 0, 2000, 50, 600, 'Выручка даркстора с одного заказа');
       h += fieldSlider('marginPct', 'Маржа даркстора до доставки, % от чека', 5, 80, 1, 30, 'Маржа в рублях = чек × маржа %');
       h += fieldSlider('courierCost', 'Ставка курьеру за заказ, руб.', 0, 500, 5, 150, 'Платится из маржи с заказа');
@@ -1298,6 +1493,7 @@
       h += '</div>';
 
       h += '<div class="card"><h2>Неделя 1. Зисы и метрики</h2>';
+      h += '<div class="hint" style="margin-bottom:8px;">Тарифы по Зисам: укажите км, заказов/день, время ходки, возврат, ставку и курьеров. Ставка: 100–180 ₽. Средняя ставка пересчитывается автоматически.</div>';
       h += fieldSlider('zoneOrders', 'Заказов на один Зис', 180, 300, 1, 250, 'Цель 180–250');
       h += fieldSlider('zoneCouriers', 'Курьеров на один Зис', 1, 10, 1, 5, 'Максимум 5');
       h += fieldSlider('avgKm', 'Средний километраж ходки, км', 0, 20, 0.5, 5, '');
@@ -1312,10 +1508,18 @@
       h += fieldSlider('curatorKpi', 'Готовность куратора к KPI, %', 0, 100, 1, 90, 'Цель к неделе 6: ≥90%');
       h += fieldSlider('curatorTraining', 'Обучение куратора (наставничество), %', 0, 100, 1, 90, 'Входит в индекс готовности: влияет на потери');
       h += fieldSlider('curatorInvolvement', 'Вовлечённость куратора, %', 0, 100, 1, 90, 'Входит в индекс готовности: влияет на потери');
+      h += fieldArea('curatorNotes1', 'Комментарий куратора по выходам (недоработанные слоты, опоздания 15–30 мин)', 'Кто не доработал слот, сколько заказов снято');
       h += adaptive('followZone', 'Зис больше 250. План деления', fieldArea('zonePlan', '', 'Какой Зис делим и как'));
       h += adaptive('followCouriers', 'В Зисе больше 5 курьеров. План', fieldArea('courierPlan', '', 'Кого и куда переносим'));
       h += adaptive('followTmc', 'ТМЦ не 100%. План', fieldArea('tmcPlan', '', 'Позиции, ответственный, срок'));
       h += adaptive('followCurator', 'Куратор ниже порога. План', fieldArea('curatorComment', '', 'Что подтягиваем и когда'));
+      h += '</div>';
+
+      // Таблица тарифов по Зисам
+      h += '<div class="card"><h2>Неделя 1. Тарифы по Зисам</h2>';
+      h += '<div class="hint" style="margin-bottom:8px;">Добавьте каждый Зис с его метриками: км, заказов/день, время ходки, возврат, ставка (100–180 ₽), курьеров. Средняя ставка пересчитывается автоматически. Зис >250 заказов или >5 курьеров — предупреждение.</div>';
+      h += '<div id="zoneTableWrap"></div>';
+      h += '<div class="ai-actions"><button type="button" class="mini-btn" id="addZoneBtn">+ Добавить Зис</button></div>';
       h += '</div>';
     }
 
@@ -1342,6 +1546,7 @@
         h += fieldSlider('curatorAutonomy2', 'Автономность куратора сейчас, %', 0, 100, 1, num(w1.curatorAutonomy)||80, 'Цель ≥90%');
         h += fieldArea('curatorPlan2', 'Что подтянули у куратора', 'Результат');
       }
+      h += fieldArea('curatorNotes2', 'Комментарий куратора по выходам (недоработанные слоты, штрафы, отключения)', 'Кто опоздал, кто снял заказы за 15–30 мин, кто не доработал слот');
       h += '</div>';
     }
 
@@ -1356,6 +1561,7 @@
       h += fieldSlider('cost' + w, 'Ставка курьеру за заказ, руб.', 0, 500, 5, num(wPrev['cost'+(w-1)])||num(wPrev.courierCost)||150, 'Пересчитанная ставка по Зисам');
       if ((num(wPrev['lateness'+(w-1)])||num(wPrev.lateness)) > 7) h += fieldArea('lateWhy' + w, 'Опоздания выше 7%. Причины и план', 'Что делаем');
       if ((num(wPrev['appeals'+(w-1)])||num(wPrev.appeals)) > 5) h += fieldArea('appealWhy' + w, 'Обращения выше 5%. Причины и план', 'Что делаем');
+      h += fieldArea('curatorNotes' + w, 'Комментарий куратора по выходам (недоработанные слоты, штрафы)', 'Кто опоздал, кто снял заказы, кто не доработал слот');
       h += '</div>';
     }
 
@@ -1371,6 +1577,7 @@
       h += fieldSlider('curatorTraining5', 'Обучение куратора, %', 0, 100, 1, num(wPrev.curatorTraining)||90, 'Входит в индекс готовности: влияет на потери');
       h += fieldSlider('curatorInvolvement5', 'Вовлечённость куратора, %', 0, 100, 1, num(wPrev.curatorInvolvement)||90, 'Входит в индекс готовности: влияет на потери');
       h += fieldRadio('courierForecast', 'Курьер прогнозирует заработок на завтра', ['да','нет','частично','другое']);
+      h += fieldArea('curatorNotes5', 'Комментарий куратора по выходам', 'Наказания, отключения, недоработки');
       h += fieldArea('stabilityPlan', 'Что стабилизируем на неделе 6', 'План');
       h += '</div>';
     }
@@ -1387,6 +1594,7 @@
       h += fieldSlider('exits6', 'Выход по слотам, %', 0, 100, 1, num(wPrev['exits5'])||num(wPrev.exits)||95, '');
       h += fieldSlider('cost6', 'Ставка курьеру за заказ, руб.', 0, 500, 5, num(wPrev['cost5'])||num(wPrev.courierCost)||150, 'Ставка, с которой закрываем перезагрузку');
       h += fieldRadio('autonomous', 'Куратор готов к самостоятельной работе', ['да','нет','частично','другое']);
+      h += fieldArea('curatorNotes6', 'Комментарий куратора по выходам', 'Итог по наказаниям и доработкам слотов');
       h += fieldArea('finalPlan', 'Что остаётся сделать после 6-й недели', 'План');
       h += '</div>';
     }
@@ -1403,6 +1611,9 @@
 
     var confirmBtn = document.getElementById('confirmWeekBtn');
     if (confirmBtn) confirmBtn.addEventListener('click', confirmVisibleFields);
+    var addZoneBtn = document.getElementById('addZoneBtn');
+    if (addZoneBtn) addZoneBtn.addEventListener('click', addZone);
+    if (w === 1) renderZoneTable();
 
     // свои варианты
     questionsEl.querySelectorAll('input[type="radio"]').forEach(function (r) {
@@ -1431,6 +1642,17 @@
         // подсветка поля, влияющего на маржу
         var q = r.closest('.q');
         if (q) { q.classList.remove('flash'); void q.offsetWidth; q.classList.add('flash'); }
+        // подсветка диапазона ставки 100–180
+        if (id === 'courierCost') {
+          var v = parseFloat(r.value) || 0;
+          if (v < ZIS_MIN_RATE || v > ZIS_MAX_RATE) {
+            r.style.borderTopColor = '#b42318';
+            if (out) out.style.color = '#b42318';
+          } else {
+            r.style.borderTopColor = '';
+            if (out) out.style.color = '';
+          }
+        }
         // если меняется калибровка — пересобрать блок прибыли
         if (w === 1 && ['cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct','zonesCount','ordersPerZoneDay','curatorTraining','curatorInvolvement'].indexOf(id) !== -1) {
           var block = document.getElementById('profitBlock');
@@ -1914,9 +2136,9 @@
   var SCHEMA_VERSION = 'strategy/2';
   var EVAL_SCHEMA_VERSION = 'evaluation/2';
   var aiPanelWeek = 0;
-  var PLAN_RANGES = { courier_cost_rub: [0, 500], zone_orders: [180, 300], zone_couriers: [1, 10], zones_count: [1, 30], orders_per_zone_day: [50, 400], tmc_target_pct: [0, 100] };
+  var PLAN_RANGES = { courier_cost_rub: [100, 180], zone_orders: [180, 300], zone_couriers: [1, 10], zones_count: [1, 30], orders_per_zone_day: [50, 400], tmc_target_pct: [0, 100] };
   var PLAN_HELP = {
-    courier_cost_rub: 'ставка курьеру за заказ, ₽',
+    courier_cost_rub: 'ставка курьеру за заказ, ₽ (диапазон 100–180)',
     zone_orders: 'заказов в день на Зис (цель 180–250)',
     zone_couriers: 'курьеров на Зис (максимум 5)',
     zones_count: 'количество Зисов',
@@ -1999,16 +2221,16 @@
 
   function realityLines() {
     var cal = calibration();
-    var maxCost = Math.round(cal.courierCost * 1.5);
     return [
-      '- Зис = 180–250 заказов в день, максимум 5 курьеров на Зис; больше — только через деление или перенос.',
+      '- Зис = 180–250 заказов в день, максимум 5 курьеров на Зис; больше — лишний курьер отключается (слот не взят, экономия на выплате).',
+      '- Сложная зона: <180 заказов — не нарушение, помечается как «сложная зона» (дальняя/пробочная).',
       '- Слоты 10–12 ч (7–19, 8–20 и аналогичные); людей в слот ставим под объём заказов.',
-      '- Опоздание ≤15 мин — без санкций; 15–30 мин — минус 1 заказ; >30 мин — разбор с куратором.',
+      '- Опоздание ≤15 мин — без санкций; 15–30 мин — минус 1 заказ; >30 мин — разбор с куратором. Куратор ежедневно мониторит и минусует заказы из пула курьера.',
       '- Полная смена: со слота 18–20 последний заказ взят в 19:30 и возврата на точку нет; ушёл раньше — слот не доработан.',
       '- ТМЦ: цель 100% (сумка, терминал, форма, зарядка).',
       '- Telegram: группы «курьеры» и «кураторы» с подгруппами по Зисам.',
-      '- Ставка за заказ ≤ ' + maxCost + ' ₽ (рост ≤50% к базовой ' + cal.courierCost + ' ₽); капитальные затраты и массовый наём не предлагать.',
-      '- Экономика: маржа с заказа (' + Math.round(cal.price * cal.marginPct / 100) + ' ₽ = чек ' + cal.price + ' ₽ × ' + cal.marginPct + '%) должна быть выше ставки курьера (' + cal.courierCost + ' ₽), иначе вклад с заказа отрицательный и рост объёмов увеличивает убыток.',
+      '- Ставка за заказ: диапазон 100–180 ₽ (ближние зоны — ближе к 100, дальние/сложные — до 180). Ставка зависит от удалённости и сложности доставки.',
+      '- Экономика: маржа с заказа (' + Math.round(cal.price * cal.marginPct / 100) + ' ₽ = чек ' + cal.price + ' ₽ × ' + cal.marginPct + '%) должна быть выше ставки курьера (' + rub(cal.courierCost) + '), иначе вклад с заказа отрицательный и рост объёмов увеличивает убыток.',
       '- Куратор: обучение и вовлечённость влияют на маржу через потери. Индекс готовности = 0.20×процессы + 0.25×автономность + 0.20×KPI + 0.20×обучение + 0.15×вовлечённость; каждый пункт дефицита до порога (' + cal.curatorThreshold + '%) умножает операционные потери на kC = ' + cal.kC + '%.'
     ];
   }
@@ -2045,8 +2267,8 @@
     L.push('');
     L.push('## 4. Данные');
     L.push('### 4.1. Калибровка (неделя 1)');
-    L.push('- Зисов: ' + cal.zonesCount + '; заказов в день на Зис: ' + cal.ordersPerZoneDay + '; итого заказов в день: ' + (cal.zonesCount * cal.ordersPerZoneDay) + '.');
-    L.push('- Маржа: ' + cal.marginPct + '% от чека ' + cal.price + ' ₽ = ' + rub(cal.price * cal.marginPct / 100) + ' с заказа; ставка курьеру: ' + cal.courierCost + ' ₽/заказ; вклад: ' + rub(cal.price * cal.marginPct / 100 - cal.courierCost) + ' с заказа; оплата курьерам: ' + rub(cal.courierCost * cal.zonesCount * cal.ordersPerZoneDay) + '/день.');
+    L.push('- Зисов: ' + cal.zonesCount + '; заказов в день на Зис: ' + cal.ordersPerZoneDay + '; итого заказов в день: ' + cal.ordersPerDay + (cal.ordersFromZones ? ' (из таблицы Зисов)' : ' (слайдеры калибровки)') + '.');
+    L.push('- Маржа: ' + cal.marginPct + '% от чека ' + cal.price + ' ₽ = ' + rub(cal.price * cal.marginPct / 100) + ' с заказа; ставка курьеру: ' + cal.courierCost + ' ₽/заказ; вклад: ' + rub(cal.price * cal.marginPct / 100 - cal.courierCost) + ' с заказа; оплата курьерам: ' + rub(cal.courierCost * cal.ordersPerDay) + '/день.');
     L.push('- Куратор: порог ' + cal.curatorThreshold + '%, штраф ниже порога ' + cal.curatorPenaltyPct + '% прибыли; индекс готовности = 0.20×процессы + 0.25×автономность + 0.20×KPI + 0.20×обучение + 0.15×вовлечённость, дефицит индекса до порога умножает потери на kC=' + cal.kC + '% за пункт. Обучение и вовлечённость куратора — рычаг маржи, а не только качество.');
     if (p) {
       var bePrompt = breakevenOf(p, cal);
@@ -2070,6 +2292,20 @@
       if (bmMissing.length) L.push('  - Не заполнено (сравнения нет): ' + bmMissing.join(', ') + '.');
     } else {
       L.push('- Бенчмарки рынка не подключены: рыночных чисел нет. Не придумывай их — если сравниваешь с рынком, верни benchmark_status = "not_connected".');
+    }
+    var zonesPrompt = (weekData(1).zones && Array.isArray(weekData(1).zones)) ? weekData(1).zones : [];
+    if (zonesPrompt.length) {
+      L.push('- Тарифы по Зисам (замер зон на неделе 1):');
+      zonesPrompt.forEach(function (z, i) {
+        var zw = validateZiz(z);
+        L.push('  - Зис ' + (i + 1) + ': ' + (z.km != null ? z.km + ' км' : 'км —') + ', ' + (z.orders != null ? z.orders : '—') + ' заказов/день, ходка ' + (z.tripTime != null ? z.tripTime : '—') +
+          ' мин, возврат ' + (z.returnTime != null ? z.returnTime : '—') + ' мин, ставка ' + (z.rate != null ? z.rate : '—') + ' ₽, курьеров ' + (z.couriers != null ? z.couriers : '—') +
+          (zw.length ? ' — ' + zw.join('; ') : '') + '.');
+      });
+      L.push('  - Средневзвешенная ставка: ' + rub(calcWeightedCost(zonesPrompt)) + '; диапазон ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽ (ближние зоны — минимум, дальние/сложные — максимум).');
+      L.push('  - Границы Зиса: > ' + ZIS_MAX_ORDERS + ' заказов или > ' + ZIS_MAX_COURIERS + ' курьеров — нарушение (лишний курьер отключается, слот не взят); < ' + ZIS_COMPLEX_ORDERS + ' заказов — «сложная зона», не нарушение. Отключение курьера на прибыль отдельной формулой не влияет: оплата за заказ, эффект идёт через опоздания и обращения.');
+    } else {
+      L.push('- Таблица Зисов не заполнена: замер по зонам (км, заказов/день, ходка, возврат) не сделан, используется средняя ставка ' + rub(cal.courierCost) + ' ₽. Тариф по Зисам не обоснован.');
     }
     L.push('');
     L.push('### 4.2. Метрики по неделям');
@@ -2126,6 +2362,14 @@
       var range = rng ? rng[0] + '…' + rng[1] : '—';
       L.push('| ' + k + ' | ' + type + ' | ' + range + ' | ' + PLAN_HELP[k] + ' |');
     });
+    L.push('');
+    L.push('## 5.1. Цели стабильной работы (недели 7–9, без перезагрузки)');
+    L.push('Недели 7–9 — даркстор работает сам и показывает стабильный результат. Форм нет, цели фиксированы:');
+    L.push('- Опоздания ≤7% — удерживаются две недели подряд (стабильность).');
+    L.push('- Обращения не растут, а снижаются неделя к неделе.');
+    L.push('- ТМЦ 100% и куратор ≥90% — удерживать две недели подряд.');
+    L.push('- Вклад с заказа ≥ 0 и выход в плюс — экономика не регрессирует ниже уровня недели 6.');
+    L.push('- Ставка курьеру в диапазоне ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽; пересмотр — только через таблицу тарифов по Зисам.');
     L.push('');
     L.push('## 6. Формат ответа (JSON, ' + SCHEMA_VERSION + ')');
     var srcLabel = week > 1 ? 'метрики недель 1–' + week : 'метрики недели 1';
@@ -2270,8 +2514,7 @@
           if (k === 'zone_couriers' && n > 5) warnings.push('week_plan.zone_couriers: ' + n + ' — в Зисе максимум 5 курьеров');
           if (k === 'zone_orders' && n > 250) warnings.push('week_plan.zone_orders: ' + n + ' — цель 180–250');
           if (k === 'courier_cost_rub') {
-            var maxRate = Math.round(calibration().courierCost * 1.5);
-            if (n > maxRate) warnings.push('week_plan.courier_cost_rub: ' + n + ' ₽ выше лимита ' + maxRate + ' ₽ (рост >50% к базовой ставке)');
+            if (n < ZIS_MIN_RATE || n > ZIS_MAX_RATE) warnings.push('week_plan.courier_cost_rub: ' + n + ' ₽ вне диапазона ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽ (тариф по удалённости/сложности)');
           }
         }
       });
@@ -2861,6 +3104,31 @@
       }
     }
     L.push('');
+    L.push('### 1.5. Тарифы по Зисам (неделя 1)');
+    var zonesList = (weekData(1).zones && Array.isArray(weekData(1).zones)) ? weekData(1).zones : [];
+    if (!zonesList.length) {
+      L.push('Таблица Зисов не заполнена: используется ставка из калибровки ' + rub(calF.courierCost) + '. Замер по зонам (км, заказов/день, ходка, возврат) не сделан — тариф не обоснован по Зисам.');
+    } else {
+      L.push('| Зис | Км | Заказов/день | Ходка, мин | Возврат, мин | Ставка, ₽ | Курьеров | Предупреждения |');
+      L.push('|---|---|---|---|---|---|---|---|');
+      zonesList.forEach(function (z, i) {
+        var warns = validateZiz(z);
+        L.push('| ' + (i + 1) + ' | ' + (z.km != null ? z.km : '—') + ' | ' + (z.orders != null ? z.orders : '—') + ' | ' +
+          (z.tripTime != null ? z.tripTime : '—') + ' | ' + (z.returnTime != null ? z.returnTime : '—') + ' | ' +
+          (z.rate != null ? z.rate : '—') + ' | ' + (z.couriers != null ? z.couriers : '—') + ' | ' + (warns.length ? warns.join('; ') : '—') + ' |');
+      });
+      var zOrders = 0, zCost = 0, zExtra = 0;
+      zonesList.forEach(function (z) {
+        var o = num(z.orders) || 0, r = num(z.rate) || 0, c = num(z.couriers) || 0;
+        zOrders += o; zCost += o * r;
+        if (c > ZIS_MAX_COURIERS) zExtra += c - ZIS_MAX_COURIERS;
+      });
+      L.push('Средневзвешенная ставка: ' + rub(calcWeightedCost(zonesList)) + ' по заказам (используется в расчёте прибыли; ставки cost2–cost6 переопределяют её по неделям). ' +
+        'Зисов: ' + zonesList.length + '; заказов/день по таблице: ' + zOrders + '.');
+      if (zExtra) L.push('Курьеров сверх нормы (более ' + ZIS_MAX_COURIERS + ' на Зис): ' + zExtra + ' — отключаются (слот не взят). На прибыль отдельной формулой не влияют: оплата за заказ, эффект — через опоздания и обращения.');
+      L.push('Диапазон ставки: ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽ (ближние зоны — минимум, дальние/сложные — максимум). Зис < ' + ZIS_COMPLEX_ORDERS + ' заказов — «сложная зона», не нарушение.');
+    }
+    L.push('');
     L.push('## 2. Прогоны ИИ');
     var mapes = [], mapErrorsRub = [], riskAvgs = [], sourcesOk = 0, conflicts = 0;
     if (!runKeys.length) L.push('Прогонов нет: цикл «промпт → JSON → следующая неделя» ещё не запускался.');
@@ -2933,6 +3201,29 @@
     }
     var tail = weekData(lastW).finalPlan || weekData(lastW).stabilityPlan || '';
     L.push('');
+    L.push('## 4.1. Комментарии куратора по выходам');
+    var hasNotes = false;
+    for (var wn = 1; wn <= TOTAL_WEEKS; wn++) {
+      var note = weekData(wn)[CURATOR_NOTE_FIELDS[wn]];
+      if (note && String(note).trim()) {
+        L.push('- Неделя ' + wn + ': ' + String(note).trim());
+        hasNotes = true;
+      }
+    }
+    if (!hasNotes) L.push('Комментариев куратора нет.');
+    L.push('');
+    L.push('## 4.2. Цели стабильной работы (недели 7–9, без перезагрузки)');
+    L.push('Недели 7–9 — даркстор работает сам и должен показывать стабильный результат. Форм для этих недель нет, цели фиксированы:');
+    L.push('- Опоздания ≤7% — держатся две недели подряд (стабильность, а не разовое значение).');
+    L.push('- Обращения не растут, а снижаются неделя к неделе.');
+    L.push('- ТМЦ 100% и куратор ≥90% — удерживать две недели подряд.');
+    L.push('- Вклад с заказа ≥ 0 и выход в плюс — экономика не должна регрессировать ниже уровня недели 6.');
+    L.push('- Ставка курьеру остаётся в диапазоне ' + ZIS_MIN_RATE + '–' + ZIS_MAX_RATE + ' ₽; пересмотр — только через таблицу тарифов по Зисам.');
+    if (lastP) {
+      L.push('Опора на факт недели ' + (lastW || '—') + ': прибыль ' + rub(lastP.profit) + '/день, вклад с заказа ' + rub(lastP.contribution) + ', опоздания ' + lastP.lateness + '%, обращения ' + lastP.appeals + '%.');
+    }
+    L.push('Если любая цель нарушена — сначала возврат к операционным причинам (слоты, ТМЦ, куратор), потом экономика.');
+    L.push('');
     L.push('## 5. Что осталось сделать');
     L.push(tail ? String(tail) : 'не заполнено (поле «Что остаётся сделать после 6-й недели» пустое).');
     L.push('');
@@ -2951,7 +3242,8 @@
       calibration: {
         zones_count: calF.zonesCount,
         orders_per_zone_day: calF.ordersPerZoneDay,
-        orders_per_day: calF.zonesCount * calF.ordersPerZoneDay,
+        orders_per_day: calF.ordersPerDay,
+        orders_from_zones: !!calF.ordersFromZones,
         price_rub: calF.price,
         margin_pct: calF.marginPct,
         margin_rub_per_order: Math.round(calF.price * calF.marginPct / 100 * 10) / 10,
@@ -3006,7 +3298,7 @@
         var q = { dataQuality: dataQualityOf(w) };
         return {
           week: w, complete: cw.complete, missing_fields: cw.missing,
-          orders_per_day: p.Q, rate_rub: p.rate,
+          orders_per_day: p.Q, orders_source: p.ordersSource, rate_rub: p.rate,
           margin_rub_per_order: Math.round(p.M * 10) / 10,
           contribution_rub_per_order: Math.round(p.contribution * 10) / 10,
           loss_share_pct: be.lossSharePct,
@@ -3108,7 +3400,34 @@
           current_value: b.current_value, delta: b.delta, better_when: b.better, verdict: b.verdict, source: b.source, date: b.date };
       }),
       benchmark_status: benchmarkStatusOf(),
-      benchmark_note: 'Бенчмарки вводит пользователь; без источника и даты не принимаются. Рыночные числа нельзя придумывать.'
+      benchmark_note: 'Бенчмарки вводит пользователь; без источника и даты не принимаются. Рыночные числа нельзя придумывать.',
+      tariff: (function () {
+        var zl = (weekData(1).zones && Array.isArray(weekData(1).zones)) ? weekData(1).zones : [];
+        var extra = 0, orders = 0;
+        zl.forEach(function (z) {
+          var c = num(z.couriers) || 0;
+          if (c > ZIS_MAX_COURIERS) extra += c - ZIS_MAX_COURIERS;
+          orders += num(z.orders) || 0;
+        });
+        return {
+          range_rub: [ZIS_MIN_RATE, ZIS_MAX_RATE],
+          max_orders_per_zone: ZIS_MAX_ORDERS,
+          max_couriers_per_zone: ZIS_MAX_COURIERS,
+          complex_zone_below_orders: ZIS_COMPLEX_ORDERS,
+          zones_filled: zl.length,
+          orders_per_day_from_zones: orders || null,
+          weighted_rate_rub: calcWeightedCost(zl),
+          extra_couriers: extra,
+          zones: zl.map(function (z, i) {
+            return { zone: i + 1, km: z.km != null ? num(z.km) : null, orders_per_day: z.orders != null ? num(z.orders) : null,
+              trip_time_min: z.tripTime != null ? num(z.tripTime) : null, return_time_min: z.returnTime != null ? num(z.returnTime) : null,
+              rate_rub: z.rate != null ? num(z.rate) : null, couriers: z.couriers != null ? num(z.couriers) : null,
+              warnings: validateZiz(z) };
+          }),
+          extra_couriers_note: 'лишний курьер не берёт слот; оплата за заказ, поэтому на прибыль отдельной формулой не влияет — эффект через метрики',
+          rate_source_note: 'ставка недель 2–6 берётся из cost2..cost6, если заполнена; иначе — средневзвешенная по таблице Зисов'
+        };
+      })()
     };
     L.push(JSON.stringify(summary, null, 2));
     L.push('');

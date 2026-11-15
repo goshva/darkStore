@@ -5,7 +5,7 @@ if (!m) throw new Error('no <script> block');
 let js = m[1];
 const idx = js.lastIndexOf('})();');
 if (idx < 0) throw new Error('no IIFE end');
-js = js.slice(0, idx) + '\n  globalThis.__t = { buildPrompt: buildPrompt, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, applyStrategy: applyStrategy, buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, runs: runs, evaluations: evaluations, expectedOf: expectedOf, profitForWeek: profitForWeek, norm: fieldValueNorm, quality: calcQualityScore, setWeek: function (x) { currentWeek = x; }, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, curatorWeights: CURATOR_WEIGHTS, breakeven: breakevenOf, breakevenAtKpi: breakevenAtTargetKpi, dataQuality: dataQualityOf, projectQuality: projectDataQuality, gatesFor: gatesFor, load: load, save: save, migrateState: migrateState, detectStateVersion: detectStateVersion, modelOlderThan: modelOlderThan, applyState: applyState, markWeekReviewed: markWeekReviewed, weeksNeedingReview: weeksNeedingReview, normalizeBenchmarks: normalizeBenchmarks, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, applyBenchmarks: applyBenchmarks, benchmarkMetrics: BENCHMARK_METRICS, stateVersion: function () { return { STATE_VERSION: STATE_VERSION, KEY: KEY, LEGACY_KEYS: LEGACY_KEYS, BACKUP_PREFIX: BACKUP_PREFIX }; } };\n' + js.slice(idx);
+js = js.slice(0, idx) + '\n  globalThis.__t = { buildPrompt: buildPrompt, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, applyStrategy: applyStrategy, buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, runs: runs, evaluations: evaluations, expectedOf: expectedOf, profitForWeek: profitForWeek, norm: fieldValueNorm, quality: calcQualityScore, setWeek: function (x) { currentWeek = x; }, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, curatorWeights: CURATOR_WEIGHTS, breakeven: breakevenOf, breakevenAtKpi: breakevenAtTargetKpi, dataQuality: dataQualityOf, projectQuality: projectDataQuality, gatesFor: gatesFor, load: load, save: save, migrateState: migrateState, detectStateVersion: detectStateVersion, modelOlderThan: modelOlderThan, applyState: applyState, markWeekReviewed: markWeekReviewed, weeksNeedingReview: weeksNeedingReview, normalizeBenchmarks: normalizeBenchmarks, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, applyBenchmarks: applyBenchmarks, benchmarkMetrics: BENCHMARK_METRICS, stateVersion: function () { return { STATE_VERSION: STATE_VERSION, KEY: KEY, LEGACY_KEYS: LEGACY_KEYS, BACKUP_PREFIX: BACKUP_PREFIX }; }, weightedCost: calcWeightedCost, validateZiz: validateZiz };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -544,7 +544,7 @@ assert(pBad.contribution < 0 && pBad.negativeUnit === true, 'loss-making unit ec
 assert(t.buildPrompt(1).includes('вклад -'), 'prompt warns about negative per-order contribution');
 
 const risky = JSON.parse(JSON.stringify(vg.value));
-risky.week_plan = { zone_couriers: 8, courier_cost_rub: 400, zone_orders: 290 };
+risky.week_plan = { zone_couriers: 8, courier_cost_rub: 180, zone_orders: 290 };
 const vr = t.validateStrategy(risky);
 assert(vr.ok === true, 'risky plan still parses');
 assert(vr.warnings.some(w => w.includes('максимум 5 курьеров')), 'warning: more than 5 couriers per ZIS');
@@ -609,5 +609,139 @@ assert(t.benchmarkStatusOf() === 'not_connected', 'пустой набор — �
 assert(t.buildFinalReport().includes('Бенчмарки не подключены'), 'в отчёте честно сказано, что бенчмарков нет');
 assert(t.buildPrompt(6).includes('Бенчмарки рынка не подключены'), 'в промпте сказано, что рыночных чисел нет');
 assert(t.buildPrompt(6).includes('benchmark_status = "not_connected"'), 'в промпте указано, как помечать отсутствие бенчмарков');
+
+// ---------- инкремент 8: тарифы по Зисам, комментарий куратора, цели Н7–Н9 ----------
+const wc = t.weightedCost;
+assert(typeof wc === 'function', 'есть функция средневзвешенной ставки');
+// 100 заказов × 100 ₽ + 200 заказов × 150 ₽ → 133.3 ₽
+assert(wc([{ orders: 100, rate: 100 }, { orders: 200, rate: 150 }]) === 133.3, 'средневзвешенная ставка по заказам (133.3)');
+assert(wc([]) === null && wc(null) === null, 'пустая таблица → null');
+
+const zizWarn = t.validateZiz;
+assert(zizWarn({ orders: 300, couriers: 3, rate: 120 }).some(x => x.includes('превышен лимит')), 'зис 300 заказов → «превышен лимит»');
+assert(zizWarn({ orders: 200, couriers: 8, rate: 120 }).some(x => x.includes('лишние курьеры: 3')), '8 курьеров → «лишние курьеры: 3 (отключить)»');
+assert(zizWarn({ orders: 150, couriers: 3, rate: 120 }).some(x => x.includes('сложная зона')), '150 заказов → «сложная зона» (не нарушение)');
+assert(zizWarn({ orders: 200, couriers: 3, rate: 90 }).some(x => x.includes('ниже диапазона')), 'ставка 90 ₽ → ниже диапазона');
+assert(zizWarn({ orders: 200, couriers: 3, rate: 190 }).some(x => x.includes('выше диапазона')), 'ставка 190 ₽ → выше диапазона');
+assert(zizWarn({ orders: 200, couriers: 5, rate: 120 }).length === 0, 'нормальный зис без предупреждений');
+
+// средневзвешенная ставка идёт в калибровку и расчёт прибыли
+const zizState = JSON.parse(JSON.stringify(FULL));
+zizState[1].zones = [{ orders: 100, rate: 100, couriers: 3 }, { orders: 200, rate: 150, couriers: 5 }];
+t.buildState(zizState);
+t.setWeek(1);
+const pz = t.profitForWeek(1);
+assert(Math.abs(pz.rate - 133.3) < 0.05, 'ставка недели 1 = средневзвешенная 133.3 ₽ (got ' + pz.rate + ')');
+const zizState2 = JSON.parse(JSON.stringify(zizState));
+zizState2[1].zones[1].rate = 180;
+t.buildState(zizState2);
+assert(t.profitForWeek(1).rate > pz.rate, 'рост ставки зиза повышает среднюю ставку');
+assert(t.profitForWeek(1).profit < pz.profit, 'рост ставки снижает прибыль');
+
+// курьеры сверх нормы: считаем счётчик, но прибыль от их числа НЕ зависит
+// (ответ заказчика: наказание влияет на прибыль через метрики, отдельной формулы нет)
+const zizState3 = JSON.parse(JSON.stringify(zizState));
+zizState3[1].zones[1].couriers = 8;
+t.buildState(zizState3);
+const pEx = t.profitForWeek(1);
+assert(pEx.extraCouriers === 3, 'лишних курьеров: 3 (got ' + pEx.extraCouriers + ')');
+assert(pEx.profit === pz.profit, 'число курьеров сверх нормы не меняет прибыль (оплата за заказ): ' + pEx.profit + ' = ' + pz.profit);
+assert(pEx.savingsRub === undefined, 'выдуманной «экономии на отключённых» в модели нет');
+
+// явная ставка недели (cost5/cost6) переопределяет средневзвешенную по Зисам
+const week5State = JSON.parse(JSON.stringify(zizState));
+delete week5State[5].cost5;
+t.buildState(week5State);
+t.setWeek(5);
+assert(Math.abs(t.profitForWeek(5).rate - 133.3) < 0.05, 'без cost5 неделя 5 берёт средневзвешенную ставку (got ' + t.profitForWeek(5).rate + ')');
+week5State[5].cost5 = 170;
+t.buildState(week5State);
+assert(t.profitForWeek(5).rate === 170, 'cost5 переопределяет средневзвешенную ставку на неделе 5 (got ' + t.profitForWeek(5).rate + ')');
+
+// ставка вне 100–180: модель считает, но помечает
+const badRate = JSON.parse(JSON.stringify(FULL));
+badRate[1].courierCost = '90';
+t.buildState(badRate);
+t.setWeek(1);
+const pBr = t.profitForWeek(1);
+assert(pBr.rate === 90, 'ставка 90 ₽ читается в модель (пользовательский ввод не блокируем)');
+
+// комментарий куратора по выходам: свой id на каждую неделю, старый curatorComment — это план по куратору
+const noteState = JSON.parse(JSON.stringify(FULL));
+noteState[1].curatorNotes1 = 'Иванов не доработал слот 18–20';
+noteState[3].curatorNotes3 = 'снято 4 заказа за опоздание 15–30 мин';
+noteState[1].curatorComment = 'план: наставник и чек-лист';
+t.buildState(noteState);
+t.setWeek(1);
+const repNote = t.buildFinalReport();
+assert(repNote.includes('## 4.1. Комментарии куратора по выходам'), 'в отчёте есть раздел комментариев куратора');
+assert(repNote.includes('Иванов не доработал слот'), 'комментарий куратора недели 1 в отчёте');
+assert(repNote.includes('снято 4 заказа'), 'комментарий куратора недели 3 в отчёте');
+assert(!repNote.includes('план: наставник и чек-лист'), 'план по куратору не попадает в комментарии по выходам');
+
+// тарифы по Зисам в отчёте и промпте
+t.buildState(JSON.parse(JSON.stringify(zizState)));
+t.setWeek(1);
+const repZ = t.buildFinalReport();
+assert(repZ.includes('### 1.5. Тарифы по Зисам (неделя 1)'), 'в отчёте есть раздел тарифов по Зисам');
+assert(repZ.includes('Средневзвешенная ставка'), 'в отчёте есть средневзвешенная ставка');
+assert(repZ.includes('Диапазон ставки: 100–180'), 'в отчёте указан диапазон ставки');
+const sumZ = JSON.parse(repZ.slice(repZ.indexOf('{\n  "model_version"'), repZ.indexOf('\n\n## 7.')));
+assert(sumZ.tariff && sumZ.tariff.zones_filled === 2, 'в сводке 2 Зиса (got ' + (sumZ.tariff && sumZ.tariff.zones_filled) + ')');
+assert(sumZ.tariff.weighted_rate_rub === 133.3, 'в сводке средневзвешенная ставка 133.3 (got ' + sumZ.tariff.weighted_rate_rub + ')');
+assert(sumZ.tariff.range_rub[0] === 100 && sumZ.tariff.range_rub[1] === 180, 'в сводке диапазон ставки 100–180');
+assert(sumZ.tariff.zones[0].orders_per_day === 100 && sumZ.tariff.zones[1].rate_rub === 150, 'в сводке метрики зон');
+const prZ = t.buildPrompt(1);
+assert(prZ.includes('Тарифы по Зисам (замер зон на неделе 1)'), 'в промпте есть таблица Зисов');
+assert(prZ.includes('Средневзвешенная ставка'), 'в промпте есть средневзвешенная ставка');
+assert(prZ.includes('Сложная зона') || prZ.includes('«сложная зона»'), 'в промпте объяснена сложная зона');
+t.buildState(FULL);
+assert(t.buildPrompt(1).includes('Таблица Зисов не заполнена'), 'без таблицы Зисов промпт честно сообщает об этом');
+assert(t.buildFinalReport().includes('Таблица Зисов не заполнена'), 'без таблицы Зисов отчёт честно сообщает об этом');
+
+// цели Н7–Н9 в отчёте и промпте
+t.buildState(FULL);
+const rep79 = t.buildFinalReport();
+assert(rep79.includes('## 4.2. Цели стабильной работы (недели 7–9'), 'в отчёте есть блок недели 7–9');
+assert(rep79.includes('Опоздания ≤7%'), 'в отчёте цель опозданий ≤7%');
+assert(rep79.includes('Обращения не растут'), 'в отчёте цель по обращениям');
+assert(rep79.includes('Опора на факт недели'), 'цели Н7–Н9 опираются на факт последней недели');
+const pr79 = t.buildPrompt(6);
+assert(pr79.includes('## 5.1. Цели стабильной работы (недели 7–9'), 'в промпте есть блок недели 7–9');
+assert(pr79.includes('100–180'), 'в промпте диапазон ставки 100–180');
+
+// валидатор плана ИИ: ставка вне 100–180 — ошибка (тариф утверждён заказчиком)
+const planOut = JSON.parse(JSON.stringify(vg.value));
+planOut.week_plan = { courier_cost_rub: 250 };
+const vOutRes = t.validateStrategy(planOut);
+assert(vOutRes.ok === false && vOutRes.errors.some(e => e.includes('вне диапазона 100…180')), 'ставка 250 ₽ в плане ИИ → ошибка диапазона');
+const planIn = JSON.parse(JSON.stringify(vg.value));
+planIn.week_plan = { courier_cost_rub: 120 };
+assert(t.validateStrategy(planIn).ok === true, 'ставка 120 ₽ в плане ИИ принимается');
+
+// объём заказов берётся из таблицы Зисов, а не из слайдеров
+const volState = JSON.parse(JSON.stringify(zizState));
+t.buildState(volState);
+t.setWeek(1);
+const pVol = t.profitForWeek(1);
+assert(pVol.Q === 300, 'объём заказов = сумма по Зисам: 100 + 200 = 300 (got ' + pVol.Q + ')');
+assert(t.coverage(1).required === 19, 'при заполненной таблице Зисов слайдеры количества Зисов и заказов не обязательны (got ' + t.coverage(1).required + ')');
+const sumVol = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
+assert(sumVol.calibration.orders_per_day === 300 && sumVol.calibration.orders_from_zones === true, 'в сводке объём из таблицы Зисов (got ' + sumVol.calibration.orders_per_day + ')');
+assert(sumVol.weeks.find(w => w.week === 1).orders_per_day === 300, 'в неделе 1 объём из таблицы Зисов');
+assert(t.buildPrompt(1).includes('(из таблицы Зисов)'), 'в промпте указано, что объём взят из таблицы Зисов');
+// явный объём недели (zoneOrders2..6) переопределяет объём из таблицы Зисов
+const volWeekState = JSON.parse(JSON.stringify(zizState));
+volWeekState[2].zoneOrders2 = 300;
+t.buildState(volWeekState);
+t.setWeek(2);
+const pVol2 = t.profitForWeek(2);
+assert(pVol2.Q === 600, 'объём недели 2 = 2 Зиса из таблицы × 300 заказов = 600 (got ' + pVol2.Q + ')');
+assert(pVol2.ordersSource === 'week_override', 'источник объёма недели 2 — явное поле недели (got ' + pVol2.ordersSource + ')');
+t.buildState(FULL);
+t.setWeek(2);
+assert(t.profitForWeek(2).Q === 1320 && t.profitForWeek(2).ordersSource === 'week_override', 'без таблицы Зисов объём недели 2 = 6 × 220 (got ' + t.profitForWeek(2).Q + ')');
+t.buildState(FULL);
+assert(t.profitForWeek(1).Q === 1320, 'без таблицы Зисов объём считается по слайдерам: 6 × 220 = 1320 (got ' + t.profitForWeek(1).Q + ')');
 
 console.log('\nDONE');

@@ -11,7 +11,7 @@ if (!m) throw new Error('no <script> block');
 let js = m[1];
 const idx = js.lastIndexOf('})();');
 if (idx < 0) throw new Error('no IIFE end');
-js = js.slice(0, idx) + '\n  globalThis.__t = { buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, profitForWeek: profitForWeek, setWeek: function (x) { currentWeek = x; }, runs: runs, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, expectedOf: expectedOf, normalizeBenchmarks: normalizeBenchmarks, applyBenchmarks: applyBenchmarks, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison };\n' + js.slice(idx);
+js = js.slice(0, idx) + '\n  globalThis.__t = { buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, profitForWeek: profitForWeek, setWeek: function (x) { currentWeek = x; }, runs: runs, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, expectedOf: expectedOf, normalizeBenchmarks: normalizeBenchmarks, applyBenchmarks: applyBenchmarks, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, weightedCost: calcWeightedCost, validateZiz: validateZiz, prompt: buildPrompt };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -231,11 +231,12 @@ const planV2 = {
   leading_indicators: [{ week: 7, metric: 'contribution_rub_per_order', target: 0 }],
   do_not_do: ['не масштабировать объём, пока вклад с заказа < 0'],
   data_sources_used: ['метрики недель 1–6'],
-  assumptions: [], open_questions: [], week_plan: { courier_cost_rub: 50 }
+  assumptions: [], open_questions: [], week_plan: { courier_cost_rub: 120 }
 };
 const vPlan = t.validateStrategy(planV2);
 check(vPlan.ok === true, 'strategy/2 принимается валидатором');
-check(vPlan.warnings.length === 0, 'strategy/2 без замечаний' + (vPlan.warnings.length ? ': ' + vPlan.warnings.join('; ') : ''));
+// В сценарии аудита маржа 5% от 1050 ₽ = 52.5 ₽, ставка 120 ₽ > маржи → ожидаем предупреждение про отрицательный вклад
+check(vPlan.warnings.every(w => w.includes('вклад с заказа')), 'strategy/2: единственное замечание — ставка выше маржи (вклад ≤ 0)' + (vPlan.warnings.length ? ': ' + vPlan.warnings.join('; ') : ''));
 
 const planV1 = { strategy_name: 'старый формат', actions: [{ action: 'x', impact_profit_rub_day: 1, impact_metrics: {}, risk: 'low', confidence: 0.5 }], expected_profit_rub_day: -100000, expected_delta_vs_baseline_pct: 20, data_sources_used: ['метрики'], week_plan: {} };
 const vPlan1 = t.validateStrategy(planV1);
@@ -298,6 +299,112 @@ check(repBm.indexOf('### 1.4. Сравнение с рынком') !== -1, 'в �
 check(repBm.indexOf('сравнение неполное') !== -1, 'отмечено неполное сравнение');
 t.applyBenchmarks({}, true);
 check(t.benchmarkStatusOf() === 'not_connected', 'пустой набор бенчмарков -> not_connected');
+
+// ---------- 8. Тарифы по Зисам, комментарии куратора, цели Н7–Н9 ----------
+section('8. Тарифы по Зисам, комментарии куратора, цели Н7–Н9');
+
+// 8.1 средневзвешенная ставка: считается по заказам и доходит до расчёта прибыли
+check(t.weightedCost([{ orders: 100, rate: 100 }, { orders: 200, rate: 150 }]) === 133.3, 'средневзвешенная ставка: 100×100 + 200×150 → 133.3 ₽');
+check(t.weightedCost([]) === null, 'пустая таблица Зисов → null (используется ставка калибровки)');
+
+const zonesState = JSON.parse(JSON.stringify(BUILTIN));
+zonesState[1].zones = [
+  { km: 3, orders: 100, tripTime: 30, returnTime: 15, rate: 100, couriers: 3 },
+  { km: 9, orders: 200, tripTime: 55, returnTime: 25, rate: 150, couriers: 5 }
+];
+t.buildState(zonesState);
+const repZ = t.buildFinalReport();
+const sumZ = JSON.parse(repZ.slice(repZ.indexOf('{\n  "model_version"'), repZ.indexOf('\n\n## 7.')));
+const wRate = t.profitForWeek(1).rate;
+check(Math.abs(wRate - 133.3) < 0.05, 'ставка недели 1 = средневзвешенная по Зисам (' + wRate + ' ₽)');
+check(sumZ.tariff && sumZ.tariff.zones_filled === 2, 'в сводке 2 Зиса');
+check(sumZ.tariff.range_rub[0] === 100 && sumZ.tariff.range_rub[1] === 180, 'диапазон ставки в сводке: 100–180 ₽');
+
+// пересчёт weighted_rate из самих зон в сводке
+let zOrders = 0, zCost = 0;
+sumZ.tariff.zones.forEach(function (z) { zOrders += z.orders_per_day; zCost += z.orders_per_day * z.rate_rub; });
+check(Math.abs(sumZ.tariff.weighted_rate_rub - Math.round(zCost / zOrders * 10) / 10) < 0.05,
+  'weighted_rate_rub сходится с зонами (' + sumZ.tariff.weighted_rate_rub + ' = ' + Math.round(zCost / zOrders * 10) / 10 + ')');
+check(repZ.indexOf('### 1.5. Тарифы по Зисам') !== -1, 'в отчёте есть раздел тарифов по Зисам');
+check(repZ.indexOf('Диапазон ставки: 100–180') !== -1, 'в отчёте указан утверждённый диапазон ставки');
+
+// 8.2 границы Зиса
+check(t.validateZiz({ orders: 300, couriers: 3, rate: 120 }).some(function (x) { return x.indexOf('превышен лимит') === 0; }), 'Зис > 250 заказов → «превышен лимит»');
+check(t.validateZiz({ orders: 200, couriers: 8, rate: 120 }).some(function (x) { return x.indexOf('лишние курьеры: 3') === 0; }), 'Зис > 5 курьеров → «лишние курьеры: 3 (отключить)»');
+check(t.validateZiz({ orders: 150, couriers: 3, rate: 120 }).some(function (x) { return x.indexOf('сложная зона') === 0; }), 'Зис < 180 заказов → «сложная зона» (не нарушение)');
+check(t.validateZiz({ orders: 200, couriers: 5, rate: 120 }).length === 0, 'Зис в норме → без предупреждений');
+
+// 8.3 курьеры сверх нормы: счётчик есть, выдуманной экономии нет
+const extraState = JSON.parse(JSON.stringify(zonesState));
+extraState[1].zones[1].couriers = 8;
+const pBase = t.profitForWeek(1);
+t.buildState(extraState);
+const pExtra = t.profitForWeek(1);
+check(pExtra.extraCouriers === 3, 'лишних курьеров: 3');
+check(pExtra.profit === pBase.profit, 'курьеры сверх нормы не меняют прибыль (оплата за заказ)');
+check(pExtra.savingsRub === undefined, 'в модели нет выдуманной «экономии на отключённых курьерах»');
+const sumExtra = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
+check(sumExtra.tariff.extra_couriers === 3 && sumExtra.tariff.extra_couriers_note.indexOf('через метрики') !== -1,
+  'в сводке есть счётчик лишних курьеров и пояснение, что эффект идёт через метрики');
+
+// 8.4 явная ставка недели переопределяет средневзвешенную
+const weekRateState = JSON.parse(JSON.stringify(zonesState));
+delete weekRateState[5].cost5;
+t.buildState(weekRateState);
+check(Math.abs(t.profitForWeek(5).rate - 133.3) < 0.05, 'без cost5 неделя 5 берёт средневзвешенную ставку');
+weekRateState[5].cost5 = 170;
+t.buildState(weekRateState);
+check(t.profitForWeek(5).rate === 170, 'cost5 переопределяет ставку недели 5');
+
+// 8.5 комментарии куратора по выходам
+const noteState = JSON.parse(JSON.stringify(BUILTIN));
+noteState[1].curatorNotes1 = 'Иванов не доработал слот 18–20';
+noteState[4].curatorNotes4 = 'снято 4 заказа за опоздание 15–30 мин';
+noteState[1].curatorComment = 'план: наставник';
+t.buildState(noteState);
+const repNotes = t.buildFinalReport();
+check(repNotes.indexOf('## 4.1. Комментарии куратора по выходам') !== -1, 'в отчёте есть раздел комментариев куратора');
+check(repNotes.indexOf('Иванов не доработал слот') !== -1 && repNotes.indexOf('снято 4 заказа') !== -1, 'комментарии недель 1 и 4 попали в отчёт');
+check(repNotes.indexOf('план: наставник') === -1, 'план по куратору не смешивается с комментариями по выходам');
+
+// 8.6 цели недель 7–9 (без формы, только ориентиры)
+t.buildState(JSON.parse(JSON.stringify(BUILTIN)));
+const rep79 = t.buildFinalReport();
+check(rep79.indexOf('## 4.2. Цели стабильной работы (недели 7–9') !== -1, 'в отчёте есть цели Н7–Н9');
+check(rep79.indexOf('Опоздания ≤7%') !== -1 && rep79.indexOf('Обращения не растут') !== -1, 'цели по опозданиям и обращениям зафиксированы');
+check(rep79.indexOf('Опора на факт недели') !== -1, 'цели Н7–Н9 привязаны к факту последней недели');
+const pr79 = t.prompt(6);
+check(pr79.indexOf('## 5.1. Цели стабильной работы (недели 7–9') !== -1, 'в промпте есть цели Н7–Н9');
+check(pr79.indexOf('100–180') !== -1, 'в промпте диапазон ставки 100–180 ₽');
+
+// 8.7 план ИИ: ставка вне утверждённого диапазона — ошибка
+const planOutRange = JSON.parse(JSON.stringify(planV2));
+planOutRange.week_plan = { courier_cost_rub: 250 };
+check(t.validateStrategy(planOutRange).ok === false, 'план ИИ со ставкой 250 ₽ отклоняется (вне 100–180 ₽)');
+const planInRange = JSON.parse(JSON.stringify(planV2));
+planInRange.week_plan = { courier_cost_rub: 120 };
+check(t.validateStrategy(planInRange).ok === true, 'план ИИ со ставкой 120 ₽ принимается');
+
+// 8.8 объём заказов берётся из таблицы Зисов, а не из слайдеров калибровки
+check(sumZ.calibration.orders_per_day === 300 && sumZ.calibration.orders_from_zones === true,
+  'объём заказов из таблицы Зисов: 100 + 200 = 300 (got ' + sumZ.calibration.orders_per_day + ')');
+check(sumZ.weeks[0].orders_per_day === 300, 'неделя 1 считает тот же объём (' + sumZ.weeks[0].orders_per_day + ')');
+check(Math.abs(sumZ.weeks[0].rate_rub * 300 - sumZ.weeks[0].orders_per_day * sumZ.weeks[0].rate_rub) < 1,
+  'ставка × объём согласованы внутри недели');
+t.buildState(JSON.parse(JSON.stringify(BUILTIN)));
+check(t.profitForWeek(1).Q === 1320, 'без таблицы Зисов объём считается по слайдерам (6 × 220)');
+
+// 8.9 объём недели: явное поле недели → таблица Зисов → слайдеры
+const weekVol = JSON.parse(JSON.stringify(zonesState));
+weekVol[2].zoneOrders2 = 300;
+t.buildState(weekVol);
+check(t.profitForWeek(2).Q === 600 && t.profitForWeek(2).ordersSource === 'week_override',
+  'объём недели 2: 2 Зиса × 300 заказов = 600, источник — поле недели (got ' + t.profitForWeek(2).Q + ', ' + t.profitForWeek(2).ordersSource + ')');
+check(t.profitForWeek(1).Q === 300 && t.profitForWeek(1).ordersSource === 'zones',
+  'объём недели 1 берётся из таблицы Зисов (got ' + t.profitForWeek(1).Q + ', ' + t.profitForWeek(1).ordersSource + ')');
+const sumVol2 = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
+check(sumVol2.weeks.find(function (w) { return w.week === 2; }).orders_source === 'week_override',
+  'в сводке указан источник объёма по неделе');
 
 // ---------- итог ----------
 console.log('\n' + (failures ? 'ПРОВАЛЕНО проверок: ' + failures : 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ'));

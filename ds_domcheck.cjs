@@ -213,4 +213,31 @@ for (let w = 1; w <= 6; w++) {
   assert(formHtml.indexOf('Полнота данных') !== -1, 'неделя ' + w + ': видна карточка полноты данных');
 }
 
+// ---------- инкремент 8: таблица зизов, комментарий куратора ----------
+t.setWeek(1);
+t.render(true);
+const w1html = getEl('questions').innerHTML;
+assert(w1html.indexOf('zoneTableWrap') !== -1, 'неделя 1: есть контейнер таблицы зизов');
+assert(w1html.indexOf('addZoneBtn') !== -1, 'неделя 1: есть кнопка «+ Добавить Зис»');
+assert(w1html.indexOf('Тарифы по Зисам') !== -1, 'неделя 1: карточка «Тарифы по Зисам»');
+assert(w1html.indexOf('100–180') !== -1, 'неделя 1: указан утверждённый диапазон ставки 100–180 ₽');
+assert(w1html.indexOf('Используется, если таблица Зисов пуста') !== -1, 'неделя 1: слайдеры количества помечены как запасные');
+assert(w1html.indexOf('curatorNotes1') !== -1, 'неделя 1: комментарий куратора по выходам (свой id)');
+
+t.setWeek(2);
+t.render(true);
+assert(getEl('questions').innerHTML.indexOf('curatorNotes2') !== -1, 'неделя 2: комментарий куратора по выходам');
+t.setWeek(3);
+t.render(true);
+assert(getEl('questions').innerHTML.indexOf('curatorNotes3') !== -1, 'неделя 3: комментарий куратора по выходам');
+t.setWeek(4);
+t.render(true);
+assert(getEl('questions').innerHTML.indexOf('curatorNotes4') !== -1, 'неделя 4: комментарий куратора по выходам');
+t.setWeek(5);
+t.render(true);
+assert(getEl('questions').innerHTML.indexOf('curatorNotes5') !== -1, 'неделя 5: комментарий куратора по выходам');
+t.setWeek(6);
+t.render(true);
+assert(getEl('questions').innerHTML.indexOf('curatorNotes6') !== -1, 'неделя 6: комментарий куратора по выходам');
+
 console.log('\nDONE');
