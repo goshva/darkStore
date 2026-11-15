@@ -30,8 +30,8 @@
         }
         .slide {
             display: none;
-            padding: 60px 70px;
-            min-height: 600px;
+            padding: 50px 60px;
+            min-height: 620px;
             flex-direction: column;
             justify-content: center;
         }
@@ -39,63 +39,57 @@
             display: flex;
         }
         h1 {
-            font-size: 3rem;
+            font-size: 2.8rem;
             font-weight: 700;
             color: #1a2b4c;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             line-height: 1.2;
         }
         h2 {
-            font-size: 2.2rem;
+            font-size: 2rem;
             font-weight: 600;
             color: #1a2b4c;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
             line-height: 1.3;
         }
         p {
-            font-size: 1.4rem;
+            font-size: 1.25rem;
             color: #3a4a6b;
             line-height: 1.6;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
         .big-number {
-            font-size: 4.5rem;
+            font-size: 4rem;
             font-weight: 800;
             line-height: 1.1;
-            margin: 10px 0;
+            margin: 8px 0;
         }
-        .positive {
-            color: #1e8e3e;
-        }
-        .negative {
-            color: #d93025;
-        }
-        .neutral {
-            color: #f29900;
-        }
+        .positive { color: #1e8e3e; }
+        .negative { color: #d93025; }
+        .neutral { color: #f29900; }
         .highlight {
             background: #e8f0fe;
             border-radius: 16px;
-            padding: 24px 32px;
+            padding: 20px 28px;
             margin: 16px 0;
         }
         .two-columns {
             display: flex;
-            gap: 40px;
+            gap: 32px;
             flex-wrap: wrap;
         }
         .two-columns > div {
             flex: 1;
-            min-width: 240px;
+            min-width: 220px;
         }
         ul {
             list-style: none;
             padding: 0;
         }
         li {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             color: #3a4a6b;
-            padding: 14px 0 14px 40px;
+            padding: 12px 0 12px 36px;
             position: relative;
             line-height: 1.5;
             border-bottom: 1px solid #eef2f6;
@@ -109,7 +103,7 @@
             left: 0;
             color: #1e8e3e;
             font-weight: 700;
-            font-size: 1.4rem;
+            font-size: 1.3rem;
         }
         li.warning::before {
             content: "!";
@@ -123,7 +117,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 40px;
+            padding: 18px 36px;
             background: #f8fafc;
             border-top: 1px solid #e2e8f0;
         }
@@ -132,8 +126,8 @@
             color: white;
             border: none;
             border-radius: 40px;
-            padding: 14px 36px;
-            font-size: 1.2rem;
+            padding: 12px 32px;
+            font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
@@ -147,11 +141,11 @@
         }
         .dots {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
         .dot {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: #cbd5e1;
             cursor: pointer;
@@ -165,93 +159,122 @@
             background: #e8f0fe;
             color: #1a2b4c;
             font-weight: 600;
-            font-size: 1rem;
-            padding: 6px 18px;
+            font-size: 0.9rem;
+            padding: 5px 16px;
             border-radius: 40px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             letter-spacing: 0.5px;
         }
         .metric-row {
             display: flex;
-            gap: 30px;
+            gap: 24px;
             flex-wrap: wrap;
-            margin: 20px 0;
+            margin: 16px 0;
         }
         .metric-card {
             background: #f8fafc;
-            border-radius: 20px;
-            padding: 24px 32px;
+            border-radius: 18px;
+            padding: 20px 26px;
             flex: 1;
-            min-width: 180px;
-            border-left: 6px solid #1a2b4c;
+            min-width: 160px;
+            border-left: 5px solid #1a2b4c;
         }
         .metric-card .label {
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: #6b7a99;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .metric-card .value {
-            font-size: 2.4rem;
+            font-size: 2rem;
             font-weight: 700;
             color: #1a2b4c;
         }
         .metric-card .change {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-top: 4px;
-        }
-        .footer-note {
             font-size: 1rem;
-            color: #8a99b5;
-            margin-top: 24px;
+            font-weight: 600;
+            margin-top: 2px;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            margin: 10px 0 20px;
+        }
+        th, td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px 8px;
+            text-align: right;
+        }
+        th:first-child, td:first-child {
+            text-align: left;
+        }
+        thead th {
+            color: #6b7a99;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+        .bar {
+            height: 12px;
+            border-radius: 6px;
+            background: #e2e8f0;
+            overflow: hidden;
+            flex: 1;
+        }
+        .bar > i {
+            display: block;
+            height: 100%;
+            background: #d93025;
+            border-radius: 6px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .badge.ok { background: #e6f4ea; color: #1e8e3e; }
+        .badge.bad { background: #fce8e6; color: #d93025; }
+        .badge.warn { background: #fef7e0; color: #f29900; }
         @media (max-width: 700px) {
             .slide {
-                padding: 32px 24px;
+                padding: 28px 20px;
                 min-height: 500px;
             }
-            h1 {
-                font-size: 2rem;
-            }
-            h2 {
-                font-size: 1.6rem;
-            }
-            p, li {
-                font-size: 1.1rem;
-            }
-            .big-number {
-                font-size: 2.8rem;
-            }
-            .metric-card .value {
-                font-size: 1.8rem;
-            }
-            .nav {
-                padding: 16px 20px;
-            }
-            .nav button {
-                padding: 10px 20px;
-                font-size: 1rem;
-            }
+            h1 { font-size: 1.8rem; }
+            h2 { font-size: 1.4rem; }
+            p, li { font-size: 1rem; }
+            .big-number { font-size: 2.4rem; }
+            .metric-card .value { font-size: 1.5rem; }
+            .nav { padding: 14px 18px; }
+            .nav button { padding: 8px 18px; font-size: 0.9rem; }
+            table { font-size: 0.8rem; }
+            th, td { padding: 6px 4px; }
         }
     </style>
 </head>
 <body>
 
 <div class="presentation">
-    <!-- Slide 1 -->
+    <!-- Slide 1: Титул -->
     <div class="slide active" id="slide1">
         <span class="tag">ИТОГИ ПЕРЕЗАГРУЗКИ</span>
         <h1>Даркстор: от убытка к прибыли</h1>
-        <p style="font-size: 1.6rem; color: #3a4a6b;">Результаты за 6 недель и план на ближайшее будущее</p>
-        <div style="margin-top: 40px;">
-            <div class="big-number positive">+96,6%</div>
-            <p style="font-size: 1.3rem; margin-top: 8px;">рост прибыли к началу перезагрузки</p>
+        <p style="font-size: 1.5rem; color: #3a4a6b;">Результаты за 6 недель и план на ближайшее будущее</p>
+        <div style="margin-top: 32px;">
+            <div class="big-number positive">+99,1%</div>
+            <p style="font-size: 1.2rem; margin-top: 4px;">сокращение убытка к началу перезагрузки</p>
         </div>
     </div>
 
-    <!-- Slide 2 -->
+    <!-- Slide 2: Главный результат -->
     <div class="slide" id="slide2">
         <h2>Главный результат</h2>
         <div class="two-columns">
@@ -265,67 +288,156 @@
             <div>
                 <div class="metric-card" style="border-left-color: #1e8e3e;">
                     <div class="label">Стало (неделя 6)</div>
-                    <div class="value" style="color: #1a2b4c;">−78 907 ₽</div>
+                    <div class="value" style="color: #1a2b4c;">−20 861 ₽</div>
                     <div class="change positive">в день</div>
                 </div>
             </div>
         </div>
-        <div class="highlight" style="margin-top: 32px;">
-            <p style="font-size: 1.3rem; margin: 0;">Прибыль выросла почти в 30 раз. До выхода в плюс осталось совсем немного.</p>
+        <div class="highlight" style="margin-top: 28px;">
+            <p style="font-size: 1.2rem; margin: 0;">Убыток сокращён более чем в 110 раз. До выхода в плюс остался один шаг.</p>
         </div>
     </div>
 
-    <!-- Slide 3 -->
+    <!-- Slide 3: Динамика по неделям -->
     <div class="slide" id="slide3">
+        <h2>Динамика по неделям</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Неделя</th>
+                    <th>Опоздания, %</th>
+                    <th>Обращения, %</th>
+                    <th>ТМЦ, %</th>
+                    <th>Выходы, %</th>
+                    <th>Прибыль, ₽/день</th>
+                    <th>Убыток</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>1</td><td>16,5</td><td>15,5</td><td>32</td><td>49</td><td class="negative">−2 327 902</td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+                <tr><td>2</td><td>18</td><td>30</td><td>76</td><td>76</td><td class="negative">−1 575 355</td><td><div class="bar"><i style="width:67.7%"></i></div></td></tr>
+                <tr><td>3</td><td>11,5</td><td>9</td><td>88</td><td>97</td><td class="negative">−532 033</td><td><div class="bar"><i style="width:22.9%"></i></div></td></tr>
+                <tr><td>4</td><td>6,5</td><td>7,5</td><td>90</td><td>80</td><td class="negative">−696 834</td><td><div class="bar"><i style="width:29.9%"></i></div></td></tr>
+                <tr><td>5</td><td>5,5</td><td>4</td><td>86</td><td>100</td><td class="negative">−212 606</td><td><div class="bar"><i style="width:9.1%"></i></div></td></tr>
+                <tr><td>6</td><td>1</td><td>4,5</td><td>100</td><td>100</td><td class="negative">−20 861</td><td><div class="bar"><i style="width:0.9%"></i></div></td></tr>
+            </tbody>
+        </table>
+        <p style="font-size: 0.95rem; color: #6b7a99; margin-top: -8px;">С 1-й по 6-ю неделю убыток сократился более чем в 110 раз. На 6-й неделе — прорыв: опоздания снижены до 1%.</p>
+    </div>
+
+    <!-- Slide 4: Что улучшили -->
+    <div class="slide" id="slide4">
         <h2>Что улучшили</h2>
         <ul>
-            <li><strong>Опоздания курьеров</strong> — снизили с 16,5% до 5,5%</li>
+            <li><strong>Опоздания курьеров</strong> — снизили с 16,5% до 1% (к неделе 6)</li>
             <li><strong>Жалобы и обращения</strong> — снизили с 15,5% до 4,5%</li>
-            <li><strong>Наличие товара</strong> — достигли 100% (было 32%)</li>
+            <li><strong>Наличие товара (ТМЦ)</strong> — достигли 100% (было 32%)</li>
             <li><strong>Выход курьеров на смену</strong> — достигли 100% (было 49%)</li>
         </ul>
-        <div class="highlight" style="margin-top: 24px;">
-            <p style="font-size: 1.2rem; margin: 0;">Потери снизились в 17 раз: с 2,28 млн ₽ до 129 тыс ₽ в день.</p>
+        <div class="highlight" style="margin-top: 20px;">
+            <p style="font-size: 1.1rem; margin: 0;">Потери снизились с 2,28 млн ₽ до 71 тыс ₽ в день (неделя 6).</p>
         </div>
     </div>
 
-    <!-- Slide 4 -->
-    <div class="slide" id="slide4">
-        <h2>Оставшаяся проблема</h2>
-        <p>Прибыль с одного заказа — <strong style="color: #d93025;">всего 37 рублей</strong>.</p>
-        <p>Маржа даркстора — <strong>13%</strong>. Этого слишком мало, чтобы уверенно выйти в плюс.</p>
-        <div class="highlight" style="margin-top: 24px;">
-            <p style="font-size: 1.3rem; margin: 0;">Нужно поднять маржу до <strong>25–30%</strong>. Тогда каждый заказ будет приносить 130–150 рублей прибыли.</p>
-        </div>
-    </div>
-
-    <!-- Slide 5 -->
+    <!-- Slide 5: Из чего состоит убыток на неделе 6 -->
     <div class="slide" id="slide5">
+        <h2>Из чего состоит убыток (неделя 6)</h2>
+        <table>
+            <thead><tr><th>Статья</th><th>Сумма, ₽/день</th><th>Доля в потерях</th></tr></thead>
+            <tbody>
+                <tr><td>Структурный вклад (маржа − ставка)</td><td class="positive">+50 085</td><td>—</td></tr>
+                <tr><td>Опоздания курьеров</td><td class="negative">−12 899</td><td>18%</td></tr>
+                <tr><td>Обращения</td><td class="negative">−58 047</td><td>82%</td></tr>
+                <tr><td>ТМЦ, выходы, штраф куратора</td><td>0</td><td>—</td></tr>
+                <tr><td><strong>Итого прибыль</strong></td><td class="negative"><strong>−20 861</strong></td><td>100%</td></tr>
+            </tbody>
+        </table>
+        <div class="highlight" style="margin-top: 12px;">
+            <p style="font-size: 1.1rem; margin: 0;">Главный драйвер убытка на неделе 6 — <strong>обращения</strong> (82% потерь). Снижение обращений до 2% выведет даркстор в плюс.</p>
+        </div>
+    </div>
+
+    <!-- Slide 6: KPI-гейты -->
+    <div class="slide" id="slide6">
+        <h2>KPI-гейты (неделя 6)</h2>
+        <table>
+            <thead><tr><th>Показатель</th><th>Значение</th><th>Статус</th></tr></thead>
+            <tbody>
+                <tr><td>Опоздания ≤ 7%</td><td>1%</td><td><span class="badge ok">OK</span></td></tr>
+                <tr><td>Обращения ≤ 5%</td><td>4,5%</td><td><span class="badge ok">OK</span></td></tr>
+                <tr><td>ТМЦ = 100%</td><td>100%</td><td><span class="badge ok">OK</span></td></tr>
+                <tr><td>Выходы ≥ 95%</td><td>100%</td><td><span class="badge ok">OK</span></td></tr>
+                <tr><td>Куратор ≥ 57%</td><td>88,6% (индекс)</td><td><span class="badge ok">OK</span></td></tr>
+                <tr><td>Вклад с заказа ≥ 0 ₽</td><td>+27 ₽</td><td><span class="badge ok">OK</span></td></tr>
+            </tbody>
+        </table>
+        <p style="font-size: 0.95rem; color: #6b7a99; margin-top: -8px;">Итог: все 6 гейтов пройдены. Даркстор готов к стабильной работе.</p>
+    </div>
+
+    <!-- Slide 7: Экономика заказа -->
+    <div class="slide" id="slide7">
+        <h2>Экономика заказа</h2>
+        <div class="two-columns">
+            <div>
+                <div class="metric-card">
+                    <div class="label">Средний чек</div>
+                    <div class="value">1 050 ₽</div>
+                </div>
+            </div>
+            <div>
+                <div class="metric-card">
+                    <div class="label">Маржа (13%)</div>
+                    <div class="value">137 ₽</div>
+                </div>
+            </div>
+            <div>
+                <div class="metric-card">
+                    <div class="label">Ставка курьера</div>
+                    <div class="value">110 ₽</div>
+                </div>
+            </div>
+            <div>
+                <div class="metric-card" style="border-left-color: #1e8e3e;">
+                    <div class="label">Вклад с заказа</div>
+                    <div class="value positive">+27 ₽</div>
+                </div>
+            </div>
+        </div>
+        <div class="highlight" style="margin-top: 24px;">
+            <p style="font-size: 1.1rem; margin: 0;">Экономика заказа положительная. Осталось снизить потери от обращений, чтобы выйти в плюс.</p>
+        </div>
+    </div>
+
+    <!-- Slide 8: План действий -->
+    <div class="slide" id="slide8">
         <h2>План действий</h2>
         <ul>
-            <li><strong>Поднять маржу до 25–30%</strong> — пересмотреть цену, комиссию или тариф доставки.</li>
-            <li><strong>Обучить куратора</strong> — сейчас готовность 43%, нужно минимум 57%.</li>
-            <li><strong>Удержать достигнутые показатели</strong> — наличие товара 100%, выходы 100%, опоздания ≤5,5%, обращения ≤4,5%.</li>
+            <li><strong>Снизить обращения до ≤2%</strong> — главный драйвер убытка (58 047 ₽/день). Разобрать причины, обучить курьеров, усилить контроль.</li>
+            <li><strong>Удержать достигнутое</strong> — опоздания 1%, ТМЦ 100%, выходы 100%, куратор 88,6%.</li>
+            <li><strong>Поддерживать куратора</strong> — индекс готовности 88,6%, но слабая компонента 43% (процессы). Подтянуть до 100%.</li>
+            <li><strong>Обосновать тариф по зонам</strong> — заполнить таблицу зон (км, заказы, время ходки), чтобы ставка 110 ₽ была не «в среднем», а по факту.</li>
+            <li><strong>Рассмотреть масштабирование</strong> после выхода в стабильную прибыль (вклад положительный).</li>
         </ul>
     </div>
 
-    <!-- Slide 6 -->
-    <div class="slide" id="slide6">
+    <!-- Slide 9: Ожидаемый результат -->
+    <div class="slide" id="slide9">
         <h2>Ожидаемый результат</h2>
-        <div class="big-number positive" style="font-size: 3.5rem;">+20–30 ₽</div>
-        <p style="font-size: 1.4rem;">с каждого заказа через 2–3 недели</p>
-        <p style="margin-top: 32px;">При выполнении плана даркстор выйдет в плюс и начнёт приносить стабильную прибыль.</p>
+        <div class="big-number positive" style="font-size: 3rem;">+11 000 ₽</div>
+        <p style="font-size: 1.3rem;">в день при снижении обращений до 2%</p>
+        <p style="margin-top: 28px;">При удержании остальных метрик даркстор выйдет в плюс и начнёт приносить стабильную прибыль.</p>
     </div>
 
-    <!-- Slide 7 -->
-    <div class="slide" id="slide7">
+    <!-- Slide 10: Что нужно от руководства -->
+    <div class="slide" id="slide10">
         <h2>Что нужно от руководства</h2>
         <ul>
-            <li><strong>Поддержать повышение маржи</strong> — запустить пилот на 2–3 зонах доставки.</li>
-            <li><strong>Выделить время на обучение куратора</strong> — наставник и чек-листы.</li>
-            <li><strong>Не наращивать объём заказов</strong>, пока прибыль с заказа не станет положительной.</li>
+            <li><strong>Поддержать работу по снижению обращений</strong> — выделить ресурс на разбор причин и обучение курьеров.</li>
+            <li><strong>Выделить время на обучение куратора</strong> — подтянуть процессы до 100%.</li>
+            <li><strong>Согласовать заполнение таблицы зон</strong> — для обоснованного тарифа курьерам.</li>
+            <li><strong>Разрешить масштабирование</strong> после выхода на стабильную прибыль (вклад с заказа положительный).</li>
         </ul>
-        <p style="margin-top: 32px; font-size: 1.2rem; color: #6b7a99;">Сначала экономика, потом масштаб.</p>
+        <p style="margin-top: 24px; font-size: 1.1rem; color: #6b7a99;">Сначала стабильная прибыль, потом рост объёмов.</p>
     </div>
 
     <!-- Navigation -->
@@ -344,7 +456,6 @@
     let currentSlide = 0;
     const totalSlides = slides.length;
 
-    // Create dots
     for (let i = 0; i < totalSlides; i++) {
         const dot = document.createElement('div');
         dot.classList.add('dot');
@@ -377,7 +488,6 @@
         updateUI();
     }
 
-    // Keyboard navigation
     document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight' || e.key === ' ') {
             e.preventDefault();
