@@ -11,7 +11,7 @@ if (!m) throw new Error('no <script> block');
 let js = m[1];
 const idx = js.lastIndexOf('})();');
 if (idx < 0) throw new Error('no IIFE end');
-js = js.slice(0, idx) + '\n  globalThis.__t = { buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, profitForWeek: profitForWeek, setWeek: function (x) { currentWeek = x; }, runs: runs, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, expectedOf: expectedOf, normalizeBenchmarks: normalizeBenchmarks, applyBenchmarks: applyBenchmarks, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, weightedCost: calcWeightedCost, validateZiz: validateZiz, prompt: buildPrompt };\n' + js.slice(idx);
+js = js.slice(0, idx) + '\n  globalThis.__t = { buildFinalReport: buildFinalReport, state: state, buildState: function (w) { state.weeks = w; }, profitForWeek: profitForWeek, setWeek: function (x) { currentWeek = x; }, runs: runs, coverage: weekCoverage, readiness: reportReadiness, metricSource: metricSource, complete: weekComplete, validateStrategy: validateStrategy, validateEvaluation: validateEvaluation, expectedOf: expectedOf, normalizeBenchmarks: normalizeBenchmarks, applyBenchmarks: applyBenchmarks, benchmarkStatusOf: benchmarkStatusOf, benchmarkComparison: benchmarkComparison, weightedCost: calcWeightedCost, validateZiz: validateZiz, prompt: buildPrompt, gatesFor: gatesFor };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -183,8 +183,8 @@ check(t.readiness().ready === false, 'Н-3: анализ помечен как �
 const gateW1 = Object.assign({}, BUILTIN[1], { curatorThreshold: '60', curatorProcess: '70', curatorAutonomy: '70', curatorKpi: '70', curatorTraining: '70', curatorInvolvement: '70' });
 t.buildState({ 1: gateW1 });
 const gateRep = t.buildFinalReport();
-check(gateRep.indexOf('- [OK] куратор ≥ 60%: 70%') !== -1, 'Н-4: гейт куратора использует калиброванный порог 60%');
-check(gateRep.indexOf('куратор ≥ 90%') === -1, 'Н-4: литерал 90% в гейте больше не используется');
+check(gateRep.indexOf('- [OK] куратор (индекс) ≥ 60%: 70%') !== -1, 'Н-4: гейт куратора использует калиброванный порог 60%');
+check(gateRep.indexOf('куратор (индекс) ≥ 90%') === -1, 'Н-4: литерал 90% в гейте больше не используется');
 
 // Гейт по унаследованной метрике не должен засчитываться: неделя 4 без полей куратора
 t.buildState({
@@ -405,6 +405,62 @@ check(t.profitForWeek(1).Q === 300 && t.profitForWeek(1).ordersSource === 'zones
 const sumVol2 = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
 check(sumVol2.weeks.find(function (w) { return w.week === 2; }).orders_source === 'week_override',
   'в сводке указан источник объёма по неделе');
+
+// ---------- 9. Единая мера куратора, пометка неизмеренных метрик, калибровка весов ----------
+section('9. Куратор, пометки источников, калибровка весов');
+
+// 9.1 куратор: индекс (штраф + множитель потерь) против слабой компоненты
+const curMix = {
+  1: {
+    zonesCount: '6', ordersPerZoneDay: '220', cost: '1050', marginPct: '13', courierCost: '100',
+    kL: '0.5', kA: '0.7', kT: '1', kE: '0.3', kC: '2', curatorThreshold: '57', curatorPenaltyPct: '5',
+    lateness: '7', appeals: '5', tmc: '100', exits: '95',
+    curatorProcess: '100', curatorAutonomy: '43', curatorKpi: '100', curatorTraining: '100', curatorInvolvement: '100'
+  }
+};
+t.buildState(curMix);
+const pMix = t.profitForWeek(1);
+check(Math.abs(pMix.curatorIndex - 85.75) < 0.01, 'индекс готовности куратора 85.75 при слабой компоненте 43 (got ' + pMix.curatorIndex + ')');
+check(pMix.curatorMin === 43, 'слабая компонента 43% остаётся в отчёте как диагностика');
+check(pMix.curatorPenaltyAmount === 0 && pMix.lossCurator === 0, 'и штраф, и множитель потерь считаются по индексу (85.75 ≥ 57) — единая мера');
+const gMix = t.gatesFor(1).find(function (g) { return g.name.indexOf('куратор') === 0; });
+check(!!gMix && gMix.value === '85.8%' && gMix.ok === true, 'гейт куратора использует индекс, а не слабую компоненту (got ' + (gMix && gMix.value) + ')');
+check(t.buildFinalReport().indexOf('85.8 / 43') !== -1, 'в таблице отчёта индекс и слабая компонента показаны вместе');
+check(t.prompt(1).indexOf('куратор ≥57%') !== -1, 'в целях промпта порог куратора из калибровки, а не литерал 90%');
+
+// 9.2 неизмеренные метрики помечаются в таблицах и в причинах
+const markState = JSON.parse(JSON.stringify(BUILTIN));
+delete markState[4].tmc4;
+t.buildState(markState);
+const repMark = t.buildFinalReport();
+const prMark = t.prompt(4);
+check(repMark.indexOf('* — метрика на этой неделе не измерялась') !== -1, 'в отчёте есть легенда звёздочки');
+check(/\| 4 \|[^\n]*\*/.test(repMark), 'неизмеренное значение помечено звёздочкой в таблице отчёта');
+check(prMark.indexOf('* — метрика на этой неделе не измерялась') !== -1, 'в промпте есть легенда звёздочки');
+check(prMark.indexOf('не измерялось на этой неделе') !== -1, 'причина по неизмеренной метрике помечена');
+check(prMark.indexOf('Сначала заполните метрику недели') !== -1, 'вместо решения — требование заполнить метрику');
+
+// 9.3 калибровка весов: завышенные веса + унаследованное ТМЦ (сценарий реального прогона)
+const heavy = JSON.parse(JSON.stringify(BUILTIN));
+heavy[1].kL = '5'; heavy[1].kA = '5'; heavy[1].kT = '3.6'; heavy[1].kE = '5';
+heavy[1].tmc = '32';
+heavy[6].lateness6 = 30;
+delete heavy[6].tmc6;
+t.buildState(heavy);
+const pHeavy = t.profitForWeek(6);
+check(pHeavy.loss > pHeavy.revenue, 'при завышенных весах потери превышают выручку (' + Math.round(pHeavy.loss / pHeavy.revenue * 100) + '%)');
+check(t.buildFinalReport().indexOf('ПОТЕРИ И ВЕСА') !== -1, 'отчёт предупреждает о завышенных весах потерь');
+check(t.prompt(6).indexOf('ПОТЕРИ И ВЕСА') !== -1, 'промпт предупреждает о завышенных весах потерь');
+check(t.prompt(6).indexOf('не делай выводов о марже и объёме') !== -1, 'промпт запрещает выводы до сверки весов');
+check(t.prompt(6).indexOf('ТМЦ') !== -1 && t.prompt(6).indexOf('не измерялось на этой неделе') !== -1, 'унаследованное ТМЦ недели 6 помечено в промпте');
+t.buildState(JSON.parse(JSON.stringify(BUILTIN)));
+const repDefault = t.buildFinalReport();
+check(repDefault.indexOf('выше дефолтных более чем в 3 раза') === -1, 'при дефолтных весах нет упрёка в калибровке весов');
+check(repDefault.indexOf('ПОТЕРИ И ВЕСА') !== -1, 'но при потерях 74% выручки (ТМЦ 32%) предупреждение о потерях остаётся');
+const cleanState = JSON.parse(JSON.stringify(BUILTIN));
+cleanState[6].tmc6 = 100;
+t.buildState(cleanState);
+check(t.buildFinalReport().indexOf('ПОТЕРИ И ВЕСА') === -1, 'при умеренных потерях предупреждения нет');
 
 // ---------- итог ----------
 console.log('\n' + (failures ? 'ПРОВАЛЕНО проверок: ' + failures : 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ'));

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Перезагрузка даркстора: разбор 6 недель</title>
+<style>
+  :root { --bg:#0e1420; --card:#161f2e; --line:#243044; --ink:#e8eef7; --muted:#93a3b8; --acc:#3ecf8e; --acc2:#2aa96f; --warn:#ffb020; --bad:#ff6b6b; --info:#4c8dff; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; }
+  body { line-height:1.45; }
+  .deck { max-width:1180px; margin:0 auto; padding:24px 18px 96px; }
+  section.slide { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:28px 30px; margin:0 0 22px; min-height:62vh; }
+  section.slide > h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.3px; }
+  section.slide > h2 { font-size:24px; margin:0 0 14px; }
+  .kicker { color:var(--acc); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+  .sub { color:var(--muted); font-size:15px; margin-bottom:18px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .grid { display:grid; gap:12px; }
+  .g2 { grid-template-columns:repeat(2,1fr); }
+  .g3 { grid-template-columns:repeat(3,1fr); }
+  .g4 { grid-template-columns:repeat(4,1fr); }
+  @media (max-width:820px){ .g2,.g3,.g4 { grid-template-columns:1fr; } section.slide { padding:20px 16px; } section.slide > h1 { font-size:24px; } }
+  .kpi { background:#101724; border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .kpi .name { color:var(--muted); font-size:12.5px; }
+  .kpi .v { font-size:26px; font-weight:800; margin-top:4px; }
+  .kpi .hint { color:var(--muted); font-size:12.5px; margin-top:4px; }
+  .ok { color:var(--acc); } .bad { color:var(--bad); } .warn { color:var(--warn); } .info { color:var(--info); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  thead th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  tbody tr:hover { background:#1b2536; }
+  .bar { height:9px; border-radius:5px; background:#22304a; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--bad); }
+  .list { margin:0; padding-left:18px; }
+  .list li { margin:6px 0; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+  .pill.ok { background:#12351f; color:var(--acc); }
+  .pill.bad { background:#3a1717; color:var(--bad); }
+  .pill.warn { background:#3a2f12; color:var(--warn); }
+  .pill.info { background:#132a4d; color:var(--info); }
+  .note { border-left:4px solid var(--warn); background:#241f12; padding:11px 14px; border-radius:10px; font-size:14px; margin:12px 0 0; }
+  .note.bad { border-color:var(--bad); background:#2a1414; }
+  .note.ok { border-color:var(--acc); background:#12251a; }
+  .note.info { border-color:var(--info); background:#131f31; }
+  code { background:#0b111c; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:13px; }
+  .footer { position:fixed; left:0; right:0; bottom:0; display:flex; align-items:center; gap:12px; justify-content:center;
+            padding:10px; background:rgba(14,20,32,.94); border-top:1px solid var(--line); backdrop-filter:blur(6px); font-size:13px; color:var(--muted); }
+  .footer button { height:38px; min-width:44px; border-radius:10px; border:1px solid var(--line); background:#1a2435; color:var(--ink); font-size:15px; font-weight:700; cursor:pointer; }
+  .footer button:active { transform:translateY(1px); }
+  .toc { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .toc a { color:var(--ink); text-decoration:none; font-size:13px; border:1px solid var(--line); border-radius:999px; padding:5px 12px; background:#101724; }
+  @media print {
+    :root { --bg:#fff; --card:#fff; --ink:#111; --muted:#555; --line:#ccc; }
+    body { background:#fff; color:#111; }
+    .footer { display:none; }
+    section.slide { page-break-after:always; border:0; padding:0; min-height:0; }
+    .kpi { border:1px solid #ccc; }
+    .note { background:#f7f7f7; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- 1 -->
+<section class="slide" id="s1">
+  <div class="kicker">Разбор результата · модель 1.3.1 · схема strategy/2</div>
+  <h1>Перезагрузка даркстора: 6 недель</h1>
+  <div class="sub">Что получилось, что было артефактом данных, где модель врёт и что делать в недели 7–9.</div>
+  <div class="grid g3">
+    <div class="kpi"><div class="name">Baseline, неделя 1</div><div class="v bad num">−2 327 902 ₽</div><div class="hint">убыток в день</div></div>
+    <div class="kpi"><div class="name">Неделя 6</div><div class="v bad num">−414 686 ₽</div><div class="hint">убыток в день</div></div>
+    <div class="kpi"><div class="name">Изменение к baseline</div><div class="v ok num">+82.2%</div><div class="hint">убыток сокращён в 5,6 раза</div></div>
+  </div>
+  <div class="note info">Чек 1 050 ₽ × маржа 13% = 137 ₽ · ставка курьеру 100 → 110 ₽ · вклад с заказа <b>+27…+37 ₽</b>.
+  Юнит-экономика положительная: правило «не масштабировать объём» здесь не применяется — проблема в потерях, а не в экономике заказа.</div>
+  <div class="toc">
+    <a href="#s2">Цифры</a><a href="#s3">Динамика</a><a href="#s4">Разложение потерь</a><a href="#s5">Артефакты</a>
+    <a href="#s6">Данные</a><a href="#s7">Гейты</a><a href="#s8">Экономика</a><a href="#s9">Веса потерь</a>
+    <a href="#s10">Исправления</a><a href="#s11">Соответствие ТЗ</a><a href="#s12">План</a><a href="#s13">Формулы</a>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" id="s2">
+  <div class="kicker">Слайд 2</div>
+  <h2>Итог в цифрах</h2>
+  <div class="grid g4">
+    <div class="kpi"><div class="name">Убыток неделя 1</div><div class="v bad num">−2,33 млн ₽/день</div></div>
+    <div class="kpi"><div class="name">Убыток неделя 6</div><div class="v bad num">−0,41 млн ₽/день</div></div>
+    <div class="kpi"><div class="name">Лучшая неделя</div><div class="v warn num">5-я: −212 606 ₽</div><div class="hint">доля потерь 97,9% выручки</div></div>
+    <div class="kpi"><div class="name">Худшая после 1-й</div><div class="v bad num">2-я: −1 575 355 ₽</div><div class="hint">обращения 30%, выходы 76%</div></div>
+  </div>
+  <div class="grid g4" style="margin-top:12px;">
+    <div class="kpi"><div class="name">Полнота данных</div><div class="v ok num">6 / 6 недель</div><div class="hint">было 3 из 6 до дозаполнения</div></div>
+    <div class="kpi"><div class="name">Качество данных</div><div class="v ok num">0,95 из 1</div><div class="hint">введено 1 · унаследовано 0,5 · дефолт 0</div></div>
+    <div class="kpi"><div class="name">Вклад с заказа</div><div class="v ok num">+27 ₽</div><div class="hint">ставка 110 ₽, маржа 137 ₽</div></div>
+    <div class="kpi"><div class="name">Гейты недели 6</div><div class="v warn num">4 из 6</div><div class="hint">не пройдены: опоздания 30%, куратор 43%</div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" id="s3">
+  <div class="kicker">Слайд 3</div>
+  <h2>Динамика по неделям</h2>
+  <table>
+    <thead><tr><th>Неделя</th><th>Опоздания, %</th><th>Обращения, %</th><th>ТМЦ, %</th><th>Выходы, %</th><th>Куратор, %<br>(индекс / слабая)</th><th>Заказов/день</th><th>Ставка, ₽</th><th>Прибыль, ₽/день</th><th>Убыток</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>16,5</td><td>15,5</td><td>32</td><td>49</td><td>39,9 / 0</td><td>1890</td><td>100</td><td class="num bad">−2 327 902</td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+      <tr><td>2</td><td>18</td><td class="bad">30</td><td>76</td><td>76</td><td>47,4 / 0</td><td>2142</td><td>110</td><td class="num bad">−1 575 355</td><td><div class="bar"><i style="width:67.7%"></i></div></td></tr>
+      <tr><td>3</td><td>11,5</td><td>9</td><td>88</td><td>97</td><td>39,9 / 0</td><td>1890</td><td>110</td><td class="num bad">−532 033</td><td><div class="bar"><i style="width:22.9%"></i></div></td></tr>
+      <tr><td>4</td><td>6,5</td><td>7,5</td><td>90</td><td class="warn">80</td><td>39,9 / 0</td><td>1890</td><td>110</td><td class="num bad">−696 834</td><td><div class="bar"><i style="width:29.9%"></i></div></td></tr>
+      <tr><td>5</td><td>5,5</td><td>4</td><td>86</td><td>100</td><td class="ok">86,5 / 43</td><td>1890</td><td>110</td><td class="num bad">−212 606</td><td><div class="bar"><i style="width:9.1%"></i></div></td></tr>
+      <tr><td>6</td><td class="bad">30</td><td>4,5</td><td class="ok">100</td><td>100</td><td class="ok">88,6 / 43</td><td>1890</td><td>110</td><td class="num bad">−414 686</td><td><div class="bar"><i style="width:17.8%"></i></div></td></tr>
+    </tbody>
+  </table>
+  <div class="note ok">Читается так: с 1-й по 5-ю неделю убыток сократился почти в 11 раз (−2,33 → −0,21 млн ₽/день).
+  На 4-й неделе откат: выходы по слотам упали до 80% и дали −257 985 ₽/день. На 6-й — срыв по опозданиям.</div>
+</section>
+
+<!-- 4 -->
+<section class="slide" id="s4">
+  <div class="kicker">Слайд 4</div>
+  <h2>Из чего состоит убыток</h2>
+  <table>
+    <thead><tr><th>Неделя</th><th>Структурный вклад<br>(заказы × вклад)</th><th>Опоздания</th><th>Обращения</th><th>ТМЦ</th><th>Выходы</th><th>Куратор<br>(множитель)</th><th>Штраф<br>куратора</th><th>Итого</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="ok num">+68 985</td><td class="num">−212 838</td><td class="num">−199 938</td><td class="num">−631 547</td><td class="num bad">−657 862</td><td class="num">−583 849</td><td class="num">−110 852</td><td class="num bad">−2 327 902</td></tr>
+      <tr><td>2</td><td class="ok num">+56 763</td><td class="num">−263 145</td><td class="num bad">−438 575</td><td class="num">−252 619</td><td class="num">−350 860</td><td class="num">−251 903</td><td class="num">−75 017</td><td class="num bad">−1 575 355</td></tr>
+      <tr><td>3</td><td class="ok num">+50 085</td><td class="num">−148 341</td><td class="num">−116 093</td><td class="num">−111 450</td><td class="num">−38 698</td><td class="num">−142 202</td><td class="num">−25 335</td><td class="num bad">−532 033</td></tr>
+      <tr><td>4</td><td class="ok num">+50 085</td><td class="num">−83 845</td><td class="num">−96 744</td><td class="num">−92 875</td><td class="num bad">−257 985</td><td class="num">−182 287</td><td class="num">−33 183</td><td class="num bad">−696 834</td></tr>
+      <tr><td>5</td><td class="ok num">+50 085</td><td class="num">−70 946</td><td class="num">−51 597</td><td class="num">−130 024</td><td class="num">0</td><td class="num">0</td><td class="num">−10 124</td><td class="num bad">−212 606</td></tr>
+      <tr><td>6</td><td class="ok num">+50 085</td><td class="num bad">−386 978</td><td class="num">−58 047</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">−19 747</td><td class="num bad">−414 686</td></tr>
+    </tbody>
+  </table>
+  <div class="note">Остаток разложения = 0 во всех неделях: отчёт сходится с моделью до рубля. Проверяется автоматически (<code>node ds_audit.cjs</code>).</div>
+  <div class="note bad">Неделя 6: <b>87% убытка — опоздания</b> (386 978 из 445 024 ₽ потерь). Это измеренный факт, а не артефакт.</div>
+</section>
+
+<!-- 5 -->
+<section class="slide" id="s5">
+  <div class="kicker">Слайд 5</div>
+  <h2>Что было артефактом, а что фактом</h2>
+  <table>
+    <thead><tr><th>Сигнал в отчёте</th><th>Что это было на самом деле</th><th>Проверка</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>«ТМЦ недели 6 = 32%, потеря 631 547 ₽/день»</td>
+        <td><span class="pill bad">артефакт</span> ТМЦ недели 6 не вводилось — подставилось значение недели 1 (32%)</td>
+        <td>после дозаполнения ТМЦ 6 = 100%: потеря 0, неделя 6 улучшилась с −1 057 966 до −414 686 ₽/день</td>
+      </tr>
+      <tr>
+        <td>«Куратор недель 2–4 = 0%»</td>
+        <td><span class="pill bad">артефакт</span> компоненты куратора на этих неделях не измерялись вовсе</td>
+        <td>в отчёте теперь помечено: «ни одна из 5 компонент не измерена — значения из недели 1»</td>
+      </tr>
+      <tr>
+        <td>«Выходы недели 4 = 98%, недели 5 = 0%» (прошлая версия)</td>
+        <td><span class="pill bad">артефакт</span> у недели 5 не было поля выходов — значение приходило из недели 1</td>
+        <td>поле добавлено, у каждой недели свой источник метрики; в таблицах значения помечаются <code>*</code></td>
+      </tr>
+      <tr>
+        <td>«Опоздания недели 6 = 30%»</td>
+        <td><span class="pill bad">факт</span> значение введено вручную (5,5% → 30% за неделю)</td>
+        <td>единственный измеренный драйвер срыва 6-й недели; стоит проверить, не артефакт ли ввода на максимуме ползунка</td>
+      </tr>
+      <tr>
+        <td>«Куратор недель 5–6 = 43% ⇒ штраф 5%»</td>
+        <td><span class="pill warn">две меры</span> 43% — слабая компонента, а индекс готовности 86,5–88,6%</td>
+        <td>исправлено: и штраф, и множитель потерь, и гейт считаются по индексу; слабая компонента — диагностика</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note ok">Главный вывод: <b>самая крупная «потеря» недели 6 была значением недели 1</b>. Система теперь помечает такие метрики и запрещает по ним выводы.</div>
+</section>
+
+<!-- 6 -->
+<section class="slide" id="s6">
+  <div class="kicker">Слайд 6</div>
+  <h2>Данные: чем можно пользоваться</h2>
+  <div class="grid g3">
+    <div class="kpi"><div class="name">Полные недели</div><div class="v ok num">6 / 6</div><div class="hint">все обязательные поля введены</div></div>
+    <div class="kpi"><div class="name">Качество данных</div><div class="v ok num">0,95</div><div class="hint">Н1 и Н5–6 = 1,0; Н2–Н4 = 0,9–0,92</div></div>
+    <div class="kpi"><div class="name">Что ещё не измерено</div><div class="v warn num">куратор Н2–Н4</div><div class="hint">Н2 — 1 из 5 компонент, Н3–Н4 — 0 из 5</div></div>
+  </div>
+  <div class="note">Правило системы: недели с качеством &lt; 0,8 и метрики со звёздочкой не используются для тренда, MAPE и выводов.
+  Сейчас под это правило попадает только динамика куратора на неделях 2–4 — остальное измерено.</div>
+  <div class="note info">Таблица Зисов (км, заказы, ходка, возврат, ставка по зоне) <b>не заполнена</b>: тариф 100–110 ₽ не обоснован замером по зонам. Отчёт говорит это прямо.</div>
+</section>
+
+<!-- 7 -->
+<section class="slide" id="s7">
+  <div class="kicker">Слайд 7</div>
+  <h2>KPI-гейты недели 6</h2>
+  <table>
+    <thead><tr><th>Гейт</th><th>Значение</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>опоздания ≤ 7%</td><td class="num">30%</td><td><span class="pill bad">НЕТ</span></td><td>386 978 ₽/день — главный рычаг недели 7</td></tr>
+      <tr><td>обращения ≤ 5%</td><td class="num">4,5%</td><td><span class="pill ok">OK</span></td><td>держатся с недели 5 (4%)</td></tr>
+      <tr><td>ТМЦ = 100%</td><td class="num">100%</td><td><span class="pill ok">OK</span></td><td>было 32% (артефакт) → заполнено → 100%</td></tr>
+      <tr><td>выходы ≥ 95%</td><td class="num">100%</td><td><span class="pill ok">OK</span></td><td>провал был на неделе 4 (80%)</td></tr>
+      <tr><td>куратор ≥ 57%</td><td class="num">43% слабая · 88,6% индекс</td><td><span class="pill warn">спорно</span></td><td>по индексу проходит, по слабой компоненте нет — мера унифицирована</td></tr>
+      <tr><td>вклад с заказа ≥ 0 ₽</td><td class="num">+27 ₽</td><td><span class="pill ok">OK</span></td><td>экономика заказа положительная</td></tr>
+    </tbody>
+  </table>
+  <div class="note">Итог в текущей сборке: <b>4 из 6</b>. После унификации меры куратора — 5 из 6: гейт куратора проходит по индексу 88,6%,
+  а штраф 5% (19 747 ₽/день) больше не начисляется, потому что индекс выше порога 57%.</div>
+</section>
+
+<!-- 8 -->
+<section class="slide" id="s8">
+  <div class="kicker">Слайд 8</div>
+  <h2>Экономика недели 6 и безубыточность</h2>
+  <div class="grid g4">
+    <div class="kpi"><div class="name">Выручка (маржа)</div><div class="v num">257 985 ₽</div><div class="hint">1890 × 136,5 ₽</div></div>
+    <div class="kpi"><div class="name">Оплата курьерам</div><div class="v num">207 900 ₽</div><div class="hint">1890 × 110 ₽</div></div>
+    <div class="kpi"><div class="name">Потери</div><div class="v bad num">445 024 ₽</div><div class="hint">опоздания 386 978 + обращения 58 047</div></div>
+    <div class="kpi"><div class="name">Штраф куратора</div><div class="v bad num">19 747 ₽</div><div class="hint">5% — снимается при расчёте по индексу</div></div>
+  </div>
+  <div class="grid g3" style="margin-top:12px;">
+    <div class="kpi"><div class="name">Доля потерь</div><div class="v bad num">172,5%</div><div class="hint">выручки — безубыточность недостижима</div></div>
+    <div class="kpi"><div class="name">Нужна маржа при целевых KPI</div><div class="v warn num">733 ₽</div><div class="hint">при ставке 110 ₽ и текущих весах</div></div>
+    <div class="kpi"><div class="name">То же при дефолтных весах</div><div class="v ok num">120 ₽</div><div class="hint">11,4% от чека — реалистичная цель</div></div>
+  </div>
+  <div class="note bad">Цифра «733 ₽ = 70% от чека» — <b>следствие весов потерь</b>, а не свойство бизнеса.
+  При дефолтной калибровке та же неделя требует 120 ₽ (11,4%). Поэтому первым шагом — сверка весов.</div>
+  <div class="note info">Ранее отчёт считал безубыточность по ставке недели 1 (100 ₽ → 667 ₽), хотя недели 2–6 работают на 110 ₽.
+  Исправлено: расчёт идёт по действующей ставке, ставка указывается в тексте.</div>
+</section>
+
+<!-- 9 -->
+<section class="slide" id="s9">
+  <div class="kicker">Слайд 9</div>
+  <h2>Главный риск выводов: калибровка весов потерь</h2>
+  <table>
+    <thead><tr><th>Вес</th><th>В проекте</th><th>Дефолт модели</th><th>Во сколько раз выше</th></tr></thead>
+    <tbody>
+      <tr><td>kL — опоздания</td><td class="num bad">5%</td><td class="num">0,5%</td><td>×10</td></tr>
+      <tr><td>kA — обращения</td><td class="num bad">5%</td><td class="num">0,7%</td><td>×7</td></tr>
+      <tr><td>kT — дефицит ТМЦ</td><td class="num bad">3,6%</td><td class="num">1,0%</td><td>×3,6</td></tr>
+      <tr><td>kE — недобор выходов</td><td class="num bad">5%</td><td class="num">0,3%</td><td>×17</td></tr>
+      <tr><td>kC — дефицит куратора</td><td class="num">2%</td><td class="num">1,0%</td><td>×2</td></tr>
+    </tbody>
+  </table>
+  <div class="note bad">При таких весах потери = 886% выручки на неделе 1 и 172% на неделе 6. Модель честно пишет «безубыточность недостижима»,
+  но это свойство калибровки: при одном и том же факте дефолтные веса дают требуемую маржу 120 ₽ вместо 733 ₽.</div>
+  <div class="note ok">Система теперь сама предупреждает: <code>!! ПОТЕРИ И ВЕСА: потери X% выручки; веса выше дефолтных более чем в 3 раза — сначала сверьте калибровку</code>.
+  Пока предупреждение активно, ИИ не делает выводов о марже и объёме.</div>
+</section>
+
+<!-- 10 -->
+<section class="slide" id="s10">
+  <div class="kicker">Слайд 10</div>
+  <h2>Что исправлено при проверке этих прогонов</h2>
+  <table>
+    <thead><tr><th>Дефект</th><th>Было</th><th>Стало</th></tr></thead>
+    <tbody>
+      <tr><td>Унаследованная метрика как факт</td><td>«ТМЦ 32%: 631 547 ₽» и решение «закрыть ТМЦ»</td><td>«ТМЦ 32% — не измерялось (значение из недели 1)» + требование заполнить</td></tr>
+      <tr><td>Две меры куратора</td><td>гейт/штраф по слабой компоненте, множитель потерь по индексу</td><td>единая мера — индекс; слабая компонента как диагностика</td></tr>
+      <tr><td>Захардкоженный порог куратора</td><td>в целях «≥90%» при пороге 57%</td><td>порог берётся из калибровки</td></tr>
+      <tr><td>Выдуманная экономия на курьерах</td><td>«лишний курьер отключается — экономия на выплате»</td><td>«на прибыль отдельной формулой не влияет: оплата за заказ»</td></tr>
+      <tr><td>Калибровка весов не проверялась</td><td>вывод «нужна маржа 667 ₽» без оговорок</td><td>предупреждение в отчёте, промпте и легенде</td></tr>
+      <tr><td>Безубыточность считалась по ставке недели 1</td><td>667 ₽ при фактической ставке 110 ₽</td><td>733 ₽, ставка указана в тексте и в сводке</td></tr>
+      <tr><td>В таблице промпта не было объёма и ставки</td><td>ИИ не видел драйверов прибыли</td><td>добавлены «Заказов/день» (с источником) и «Ставка, ₽»</td></tr>
+      <tr><td>Скрытое наследование метрик</td><td>выходы недели 5 приходили из недели 1</td><td>поле добавлено; у каждой метрики виден источник; звёздочка в таблицах</td></tr>
+      <tr><td>Ставка и объём игнорировали таблицу Зисов</td><td>«2 Зиса, 300 заказов» в отчёте при расчёте на 1320</td><td>объём и средневзвешенная ставка берутся из таблицы Зисов</td></tr>
+      <tr><td>Двойной знак рубля, нумерация разделов</td><td>«100 ₽ ₽», разделы 4.05 и 4.1</td><td>исправлено (4.1 комментарии, 4.2 цели Н7–Н9)</td></tr>
+    </tbody>
+  </table>
+  <div class="note ok">Все исправления покрыты тестами: <b>570 проверок</b> (selfcheck 324, audit 160, domcheck 86), аудит сверяет разложение прибыли до рубля.</div>
+</section>
+
+<!-- 11 -->
+<section class="slide" id="s11">
+  <div class="kicker">Слайд 11</div>
+  <h2>Соответствие модели перезагрузки</h2>
+  <table>
+    <thead><tr><th>Требование</th><th>Статус</th><th>Как проверяется</th></tr></thead>
+    <tbody>
+      <tr><td>Диагностика, серые аккаунты, аудит ТМЦ</td><td><span class="pill ok">есть</span></td><td>форма недели 1, чек-листы, «что уже сделано»</td></tr>
+      <tr><td>Метрики по зонам для тарифа (км, заказы, ходка, возврат)</td><td><span class="pill ok">есть</span></td><td>таблица Зисов → средневзвешенная ставка</td></tr>
+      <tr><td>Зизы 180–250 заказов, ≤5 курьеров</td><td><span class="pill ok">есть</span></td><td>валидация: лимит, «лишние курьеры — отключить», «сложная зона &lt;180»</td></tr>
+      <tr><td>Ставка 100–180 ₽, зависит от зоны</td><td><span class="pill ok">есть</span></td><td>диапазон в форме, в промпте и в плане ИИ (вне диапазона — отказ)</td></tr>
+      <tr><td>Опоздания 15/30 мин, недоработанный слот</td><td><span class="pill warn">ручной учёт</span></td><td>формулы нет (по ответу заказчика): слайдер выходов + комментарий куратора по каждой неделе</td></tr>
+      <tr><td>5 KPI-гейтов + вклад с заказа</td><td><span class="pill ok">есть</span></td><td>гейты только по измеренным метрикам, унаследованные — [Н/Д]</td></tr>
+      <tr><td>Не масштабировать объём при вкладе ≤ 0</td><td><span class="pill ok">есть</span></td><td>гейт + <code>do_not_do</code> + правило в промпте</td></tr>
+      <tr><td>Разложение потерь, приоритеты, опережающие метрики, качество данных</td><td><span class="pill ok">есть</span></td><td>разделы 1.2, 5, 6 отчёта; схема evaluation/2</td></tr>
+      <tr><td>Недели 7–9 (стабильная работа, без формы)</td><td><span class="pill ok">есть</span></td><td>цели в отчёте (4.2) и промпте (5.1), с опорой на факт недели 6</td></tr>
+      <tr><td>Бенчмарки рынка с источником и датой</td><td><span class="pill info">не подключены</span></td><td>вводятся вручную; без источника не принимаются</td></tr>
+      <tr><td>Распределение курьеров по слотам внутри Зиса</td><td><span class="pill bad">нет</span></td><td>есть чек-лист слотов и метрика выходов; послотовой модели нет</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 12 -->
+<section class="slide" id="s12">
+  <div class="kicker">Слайд 12</div>
+  <h2>Что делать: недели 7–9</h2>
+  <div class="grid g2">
+    <div>
+      <h3 style="margin:0 0 8px;font-size:17px;">Порядок действий</h3>
+      <ol class="list">
+        <li><b>Сверить веса потерь</b> kL/kA/kT/kE (сейчас ×3…×17 от дефолтов). От них зависят все выводы о марже и объёме.</li>
+        <li><b>Закрыть опоздания недели 6</b> (30% = 386 978 ₽/день): проверить, реальный ли это срыв, разобрать по Зисам и курьерам, вернуть к ≤7%.</li>
+        <li><b>Дозаполнить куратора на неделях 2–4</b> — тогда весь тренд будет на измеренных данных (качество 0,95 → 1,0).</li>
+        <li><b>Заполнить таблицу Зисов</b>: км, заказы, ходка, возврат, ставка по зоне (100–180 ₽) — обосновать тариф, а не оставлять 110 ₽ «в среднем».</li>
+        <li><b>Держать то, что уже работает</b>: обращения 4,5%, ТМЦ 100%, выходы 100%, вклад +27 ₽/заказ.</li>
+      </ol>
+    </div>
+    <div>
+      <h3 style="margin:0 0 8px;font-size:17px;">Цели стабильной работы</h3>
+      <div class="kpi" style="margin-bottom:8px;"><div class="name">Опоздания</div><div class="v ok">≤ 7% две недели подряд</div></div>
+      <div class="kpi" style="margin-bottom:8px;"><div class="name">Обращения</div><div class="v ok">не растут, снижаются неделя к неделе</div></div>
+      <div class="kpi" style="margin-bottom:8px;"><div class="name">ТМЦ и куратор</div><div class="v ok">100% и ≥ порога (индекс готовности)</div></div>
+      <div class="kpi"><div class="name">Экономика</div><div class="v ok">вклад с заказа ≥ 0, прибыль не хуже недели 6</div></div>
+      <div class="note info" style="margin-top:10px;">Ориентир по марже: при дефолтных весах безубыточность — <b>120 ₽ с заказа (11,4% чека)</b>;
+      сейчас маржа 137 ₽ (13%) — запас есть, но он съедается потерями.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" id="s13">
+  <div class="kicker">Слайд 13 · приложение</div>
+  <h2>Как считает модель</h2>
+  <p><b>Прибыль в день</b> = заказы × (маржа с заказа − ставка курьеру) − потери − штраф куратора.</p>
+  <ul class="list">
+    <li><b>Маржа с заказа</b> = чек × маржа % (неделя 1): 1 050 × 13% = 136,5 ₽.</li>
+    <li><b>Потери</b> = выручка × (kL% × опоздания% + kA% × обращения% + kT% × дефицит ТМЦ% + kE% × недобор выходов%) — со знаком минус в разложении.</li>
+    <li><b>Куратор</b>: индекс готовности = 0,20 × процессы + 0,25 × автономность + 0,20 × KPI + 0,20 × обучение + 0,15 × вовлечённость.
+      Дефицит индекса до порога умножает потери на kC% за пункт; при индексе ниже порога добавляется штраф % прибыли.</li>
+    <li><b>Безубыточная маржа</b> = ставка / (1 − доля потерь); при доле ≥ 100% безубыточность недостижима.</li>
+    <li><b>Источник метрики</b>: введено = 1, унаследовано из недели 1 = 0,5, дефолт модели = 0. Метрики со звёздочкой в выводы не берутся.</li>
+  </ul>
+  <div class="note ok">Проверки: <code>node ds_selfcheck.cjs index.html</code> · <code>node ds_audit.cjs</code> · <code>node ds_domcheck.cjs index.html</code> —
+  разложение прибыли сверяется до рубля, остаток должен быть нулевым.</div>
+</section>
+
+</div>
+
+<div class="footer">
+  <button id="prev" title="Назад">←</button>
+  <span id="counter">1 / 13</span>
+  <button id="next" title="Вперёд">→</button>
+  <span style="opacity:.7">перелистывание: ← → · пробел · PgUp/PgDn</span>
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+  var counter = document.getElementById('counter');
+  var idx = 0;
+  function current() {
+    for (var i = 0; i < slides.length; i++) {
+      var r = slides[i].getBoundingClientRect();
+      if (r.top > -window.innerHeight * 0.5) return i;
+    }
+    return slides.length - 1;
+  }
+  function show(i) {
+    idx = Math.max(0, Math.min(slides.length - 1, i));
+    slides[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    counter.textContent = (idx + 1) + ' / ' + slides.length;
+  }
+  window.addEventListener('scroll', function () { counter.textContent = (current() + 1) + ' / ' + slides.length; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); show(current() + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(current() - 1); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+  });
+  document.getElementById('next').addEventListener('click', function () { show(current() + 1); });
+  document.getElementById('prev').addEventListener('click', function () { show(current() - 1); });
+  show(0);
+})();
+</script>
+</body>
+</html>

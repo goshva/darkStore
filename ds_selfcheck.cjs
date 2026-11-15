@@ -368,7 +368,7 @@ const summaryFull = JSON.parse(repFull.slice(repFull.indexOf('{\n  "model_versio
 assert(summaryFull.analysis_ready === true, 'полные данные -> analysis_ready = true');
 assert(summaryFull.gates_week === 6, 'гейты считаются по последней полной неделе');
 assert(summaryFull.gates_passed === true, 'на полных данных все гейты проходят');
-assert(repFull.includes('куратор ≥ 90%'), 'порог куратора берётся из калибровки');
+assert(repFull.includes('куратор (индекс) ≥ 90%'), 'порог куратора берётся из калибровки');
 
 // ---------- инкремент 2: сводка содержит входы модели и разложение прибыли ----------
 assert(summaryFull.calibration && summaryFull.calibration.orders_per_day === 1320, 'в сводке есть объём заказов/день (6 Зисов × 220)');
@@ -526,7 +526,7 @@ lowThreshold[6].curatorAutonomy6 = 70; lowThreshold[6].curatorKpi6 = 70; lowThre
 t.buildState(lowThreshold);
 t.setWeek(6);
 const repLow = t.buildFinalReport();
-assert(repLow.includes('- [OK] куратор ≥ 60%: 70%'), 'гейт куратора использует калиброванный порог 60% (got: ' + (repLow.split('\n').find(l => l.includes('куратор ≥')) || '') + ')');
+assert(repLow.includes('- [OK] куратор (индекс) ≥ 60%: 70%'), 'гейт куратора использует калиброванный порог 60% (got: ' + (repLow.split('\n').find(l => l.includes('куратор ≥')) || '') + ')');
 
 const healthyW1 = { 1: { zonesCount: '6', ordersPerZoneDay: '220', cost: '600', marginPct: '30', courierCost: '150', lateness: '7', appeals: '5', tmc: '100', exits: '95' } };
 t.buildState(healthyW1);
@@ -743,5 +743,77 @@ t.setWeek(2);
 assert(t.profitForWeek(2).Q === 1320 && t.profitForWeek(2).ordersSource === 'week_override', 'без таблицы Зисов объём недели 2 = 6 × 220 (got ' + t.profitForWeek(2).Q + ')');
 t.buildState(FULL);
 assert(t.profitForWeek(1).Q === 1320, 'без таблицы Зисов объём считается по слайдерам: 6 × 220 = 1320 (got ' + t.profitForWeek(1).Q + ')');
+
+// ---------- инкремент 9: единая мера куратора, пометка неизмеренных метрик, калибровка весов ----------
+// куратор: индекс (он множит потери и даёт штраф) против слабой компоненты
+const curState = { 1: {
+  zonesCount: '6', ordersPerZoneDay: '220', cost: '1050', marginPct: '13', courierCost: '100',
+  kL: '0.5', kA: '0.7', kT: '1', kE: '0.3', kC: '2', curatorThreshold: '57', curatorPenaltyPct: '5',
+  lateness: '7', appeals: '5', tmc: '100', exits: '95',
+  curatorProcess: '100', curatorAutonomy: '43', curatorKpi: '100', curatorTraining: '100', curatorInvolvement: '100'
+} };
+t.buildState(curState);
+t.setWeek(1);
+const pCurM = t.profitForWeek(1);
+assert(Math.abs(pCurM.curatorIndex - 85.75) < 0.01, 'индекс готовности куратора 85.75 (got ' + pCurM.curatorIndex + ')');
+assert(pCurM.curatorMin === 43, 'слабая компонента куратора = 43%');
+assert(pCurM.curatorPenaltyAmount === 0, 'штраф считается по индексу: 85.75 ≥ 57 → штрафа нет');
+assert(pCurM.lossCurator === 0, 'и множитель потерь тоже по индексу: надбавки нет');
+const gCurM = t.gatesFor(1).find(g => g.name.indexOf('куратор') === 0);
+assert(gCurM && gCurM.measured === true && gCurM.ok === true, 'гейт куратора использует индекс и проходит');
+assert(gCurM.value === '85.8%', 'в гейте показан индекс, а не слабая компонента (got ' + gCurM.value + ')');
+assert(t.buildFinalReport().includes('85.8 / 43'), 'в таблице отчёта индекс и слабая компонента через дробь');
+assert(t.buildPrompt(1).includes('куратор ≥57%'), 'в целях промпта порог куратора из калибровки, а не литерал 90%');
+
+// пометка причин и значений по неизмеренной метрике
+const markState = JSON.parse(JSON.stringify(FULL));
+delete markState[4].tmc4;
+t.buildState(markState);
+t.setWeek(4);
+const prMark = t.buildPrompt(4);
+assert(prMark.includes('не измерялось на этой неделе'), 'причина по неизмеренной метрике помечена в промпте');
+assert(prMark.includes('Сначала заполните метрику недели'), 'вместо решения — требование заполнить метрику');
+assert(prMark.includes('* — метрика на этой неделе не измерялась'), 'в промпте есть легенда звёздочки');
+const repMark = t.buildFinalReport();
+assert(repMark.includes('* — метрика на этой неделе не измерялась'), 'в отчёте есть легенда звёздочки');
+assert(/\| 4 \|[^\n]*\*/.test(repMark), 'в таблице отчёта неизмеренное значение помечено звёздочкой');
+
+// калибровка весов потерь: завышенные веса + унаследованное ТМЦ (сценарий реального прогона)
+const heavyWeights = JSON.parse(JSON.stringify(FULL));
+heavyWeights[1].kL = '5'; heavyWeights[1].kA = '5'; heavyWeights[1].kT = '3.6'; heavyWeights[1].kE = '5';
+heavyWeights[1].tmc = '32';
+heavyWeights[6].lateness6 = 30;
+delete heavyWeights[6].tmc6;   // ТМЦ недели 6 не измерялся — унаследован из недели 1 (32%), как в реальном прогоне
+t.buildState(heavyWeights);
+t.setWeek(6);
+const pH = t.profitForWeek(6);
+assert(pH.loss > pH.revenue, 'при завышенных весах потери превышают выручку (' + Math.round(pH.loss / pH.revenue * 100) + '% выручки)');
+const repH = t.buildFinalReport();
+assert(repH.includes('ПОТЕРИ И ВЕСА'), 'отчёт предупреждает о завышенных весах потерь');
+const prH = t.buildPrompt(6);
+assert(prH.includes('ПОТЕРИ И ВЕСА'), 'промпт предупреждает о завышенных весах потерь');
+assert(prH.includes('не делай выводов о марже и объёме'), 'промпт запрещает выводы до сверки весов');
+assert(prH.includes('ТМЦ') && prH.includes('не измерялось на этой неделе'), 'промпт помечает унаследованное ТМЦ недели 6 как неизмеренное');
+t.buildState(FULL);
+t.setWeek(6);
+assert(!t.buildFinalReport().includes('ПОТЕРИ И ВЕСА'), 'при дефолтных весах предупреждения нет');
+
+// безубыточность при целевых KPI считается по действующей ставке недели, а не по калибровке
+const rateState = JSON.parse(JSON.stringify(FULL));
+rateState[1].kL = '5'; rateState[1].kA = '5'; rateState[1].kT = '3.6'; rateState[1].kE = '5';
+rateState[1].courierCost = '100';
+rateState[1].curatorThreshold = '57';
+rateState[6].cost6 = '110';
+t.buildState(rateState);
+t.setWeek(6);
+assert(t.breakevenAtKpi(null, 110).rate_rub === 110, 'в расчёте указана действующая ставка');
+assert(Math.abs(t.breakevenAtKpi(null, 110).breakeven_margin_rub - 733.3) < 1, 'ставка 110 ₽ при потерях 85% → маржа 733 ₽ (got ' + t.breakevenAtKpi(null, 110).breakeven_margin_rub + ')');
+assert(Math.abs(t.breakevenAtKpi(null, null).breakeven_margin_rub - 666.7) < 1, 'без ставки недели берётся ставка калибровки 100 ₽ → 667 ₽');
+const sumRate = JSON.parse(t.buildFinalReport().slice(t.buildFinalReport().indexOf('{\n  "model_version"'), t.buildFinalReport().indexOf('\n\n## 7.')));
+assert(sumRate.breakeven_at_target_kpi.rate_rub === 110, 'в сводке безубыточность посчитана по ставке недели 6 (got ' + sumRate.breakeven_at_target_kpi.rate_rub + ')');
+assert(Math.abs(sumRate.breakeven_at_target_kpi.breakeven_margin_rub - 733.3) < 1, 'в сводке маржа 733 ₽, а не 667 ₽');
+assert(t.buildFinalReport().includes('и ставке 110 ₽'), 'в отчёте указано, по какой ставке считалась безубыточность');
+assert(t.buildPrompt(6).includes('и ставке 110 ₽'), 'в промпте указана ставка расчёта');
+assert(t.buildFinalReport().includes('куратор ≥57% (индекс готовности)'), 'в целях Н7–Н9 порог куратора из калибровки');
 
 console.log('\nDONE');
