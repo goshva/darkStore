@@ -30,7 +30,7 @@ const weeks = {
   2: { lateness2: 8, appeals2: 7, exits2: 91, tmc2: 90, zoneOrders2: 240, zoneCouriers2: 5 },
   3: { lateness3: 6, appeals3: 4, exits3: 93, tmc3: 95, cost3: 160 }
 };
-store['darkstore_profit_live_v4'] = JSON.stringify({ weeks, currentWeek: 1 });
+store['darkstore_profit_live_v5'] = JSON.stringify({ weeks, currentWeek: 1 });
 
 const fn = new Function('document', 'window', 'navigator', 'localStorage', 'confirm', js + '\nreturn null;');
 fn(document, { scrollTo() {} }, {}, localStorage, () => true);

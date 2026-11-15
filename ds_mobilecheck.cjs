@@ -212,7 +212,7 @@ async function targetsList() {
     var other = document.querySelector('input[data-id="blocker"][value="другое"]');
     if (other) { other.checked = true; other.dispatchEvent(new Event('change', {bubbles:true})); }
     out.otherVisible = (function(){ var el = document.querySelector('input[data-id="blocker_other"]'); return el ? getComputedStyle(el).display : 'missing'; })();
-    var saved = JSON.parse(localStorage.getItem('darkstore_profit_live_v4') || '{}');
+    var saved = JSON.parse(localStorage.getItem('darkstore_profit_live_v5') || '{}');
     out.saved = { cost: saved.weeks['1'].cost, courierCost: saved.weeks['1'].courierCost, lateness: saved.weeks['1'].lateness, dsName: saved.weeks['1'].dsName, done: saved.weeks['1'].done, blocker: saved.weeks['1'].blocker };
     out.score = document.getElementById('liveScore').textContent;
     out.status = document.getElementById('liveStatus').textContent;

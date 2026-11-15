@@ -2,7 +2,10 @@ const fs = require('fs');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const m = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!m) throw new Error('no <script> block');
-const js = m[1];
+let js = m[1];
+const idx = js.lastIndexOf('})();');
+if (idx < 0) throw new Error('no IIFE end');
+js = js.slice(0, idx) + '\n  globalThis.__t = { state: state, buildState: function (w) { state.weeks = w; }, setWeek: function (x) { currentWeek = x; }, readiness: reportReadiness, render: render, benchmarkEntries: benchmarkEntries, benchmarkStatusOf: benchmarkStatusOf };\n' + js.slice(idx);
 
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
@@ -40,18 +43,59 @@ const document = {
 };
 const window = { scrollTo() {} };
 const navigator = {};
-const fn = new Function('document', 'window', 'navigator', 'localStorage', 'confirm', js + '\nreturn null;');
-fn(document, window, navigator, localStorage, () => true);
+const fn = new Function('document', 'window', 'navigator', 'localStorage', 'confirm', js + '\nreturn globalThis.__t;');
+const t = fn(document, window, navigator, localStorage, () => true);
 
 function assert(cond, msg) { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else { console.log('ok: ' + msg); } }
 
+// --- миграция старого проекта (ключ v4) на входе приложения ---
+store['darkstore_profit_live_v4'] = JSON.stringify({
+  currentWeek: 1,
+  weeks: { 1: { zonesCount: '6', ordersPerZoneDay: '220', cost: '1050', marginPct: '5', courierCost: '100', lateness: '7', appeals: '9.5', tmc: '32', exits: '90' } }
+});
+
 (document.handlers.DOMContentLoaded || []).forEach(f => f());
+
+assert(getEl('migrationNotice').style.display === 'block', 'показан баннер о переносе проекта');
+assert(getEl('migrationText').textContent.indexOf('1.3.0') !== -1, 'баннер объясняет смену версии формулы');
+assert(getEl('migrationText').textContent.indexOf('проверить') !== -1, 'баннер объясняет пометку недель');
+assert(!!store['darkstore_profit_live_v5'], 'проект сохранён под версионированным ключом v5');
+assert(JSON.parse(store['darkstore_profit_live_v5']).state_version === 2, 'в сохранении есть схема состояния');
+assert(Object.keys(store).some(k => k.indexOf('darkstore_backup_') === 0), 'создана резервная копия старого проекта');
+assert(t.readiness().ready === false && t.readiness().reviewWeeks.length === 1, 'неделя помечена к проверке после переноса');
+assert(getEl('liveBreakdown').innerHTML.includes('К проверке'), 'легенда показывает недели к проверке');
+
+getEl('migrationOkBtn').click();
+assert(getEl('promptWeek').textContent === '1', 'кнопка ведёт к первой неделе на проверке');
+assert(getEl('aiApplyStatus').textContent.indexOf('Проверьте неделю') === 0, 'статус просит проверить неделю');
+
+getEl('resetBtn').click();
+assert(getEl('migrationNotice').style.display === 'none', 'после сброса баннер скрыт');
+assert(t.readiness().reviewWeeks.length === 0, 'сброс очищает пометки проверки');
+
 assert(getEl('promptOut').value.includes('# ЗАПРОС К ИИ'), 'page rendered and prompt built');
 assert(getEl('promptWeek').textContent === '1', 'prompt shows week 1');
 assert(getEl('aiApplyStatus').textContent.length > 0, 'status initialised');
-assert(getEl('liveBreakdown').innerHTML.includes('Заполненность'), 'legend shows fill component');
-assert(getEl('liveBreakdown').innerHTML.includes('Прибыль к baseline'), 'legend shows profit component');
-assert(getEl('liveBreakdown').innerHTML.includes('топ-5'), 'legend explains the bars');
+assert(getEl('liveBreakdown').innerHTML.includes('Полнота недели'), 'легенда показывает полноту недели');
+assert(getEl('liveBreakdown').innerHTML.includes('Полных недель'), 'легенда показывает число полных недель');
+assert(getEl('liveBreakdown').innerHTML.includes('Качество данных'), 'легенда показывает качество данных (унаследованные метрики)');
+assert(getEl('liveBreakdown').innerHTML.includes('неточен'), 'легенда предупреждает, что анализ неточен');
+assert(getEl('liveStatus').textContent.includes('не хватает'), 'статус сообщает, сколько обязательных полей не хватает');
+assert(/id="evalJsonIn"/.test(html) && /id="checkEvalBtn"/.test(html), 'в интерфейсе есть блок проверки оценки ИИ (evaluation/2)');
+
+// --- бенчмарки рынка: спрашиваем при старте ---
+assert(/id="benchmarkCard"/.test(html) && /id="benchmarkOpenBtn"/.test(html), 'в интерфейсе есть карточка бенчмарков и кнопка её открытия');
+assert(getEl('benchmarkCard').style.display === 'block', 'при старте показана карточка бенчмарков');
+assert(getEl('benchmarkBadge').textContent === 'нет данных', 'бейдж бенчмарков: нет данных');
+assert(getEl('benchmarkForm').innerHTML.includes('data-bm-value="margin_pct"') && getEl('benchmarkForm').innerHTML.includes('data-bm-source="courier_rate_rub"'), 'форма просит значение и источник по каждой метрике');
+getEl('benchmarkSkipBtn').click();
+assert(getEl('benchmarkCard').style.display === 'none', 'после «нет данных» карточка скрыта');
+assert(t.state.benchmarkAsked === true && t.benchmarkEntries().length === 0, 'пропуск сохранён: бенчмарков нет');
+assert(getEl('benchmarkStatus').textContent.includes('not_connected'), 'статус объясняет not_connected');
+getEl('benchmarkOpenBtn').click();
+assert(getEl('benchmarkCard').style.display === 'block', 'кнопка снова открывает карточку бенчмарков');
+getEl('benchmarkSaveBtn').click();
+assert(getEl('benchmarkStatus').textContent.includes('не заполнены'), 'пустая форма не создаёт бенчмарков');
 
 const answer = {
   strategy_name: 'Слоты + ТМЦ',
@@ -67,13 +111,7 @@ getEl('aiJsonIn').value = JSON.stringify(answer);
 getEl('applyAiBtn').click();
 assert(getEl('promptWeek').textContent === '2', 'after apply UI moved to week 2');
 assert(getEl('aiApplyStatus').textContent.includes('применён к неделе 2'), 'apply status reported');
-assert(JSON.parse(store['darkstore_profit_live_v4']).weeks['2'].zoneOrders2 === 220, 'answer persisted into week 2');
-
-getEl('finalBtn').click();
-assert(getEl('finalOut').value.includes('# ИТОГОВЫЙ ОТЧЁТ'), 'final report rendered');
-assert(getEl('finalBlock').style.display === 'block', 'final report block shown');
-assert(getEl('finalOut').value.includes('MAPE'), 'final report has MAPE');
-assert(store['darkstore_profit_live_v4'].includes('finalReport'), 'final report persisted');
+assert(JSON.parse(store['darkstore_profit_live_v5']).weeks['2'].zoneOrders2 === 220, 'answer persisted into week 2');
 
 getEl('aiJsonIn').value = '{"strategy_name": "x"}';
 getEl('applyAiBtn').click();
@@ -83,5 +121,96 @@ assert(getEl('promptWeek').textContent === '2', 'invalid answer does not move th
 getEl('copyPromptBtn').click();
 getEl('exportBtn').click();
 assert(getEl('aiApplyStatus').textContent.includes('Экспорт готов'), 'export JSON reports success');
+
+// ---------- проверка оценки ИИ (evaluation/2) ----------
+const goodEval = {
+  schema_version: 'evaluation/2',
+  verdict: 'Экономика заказа не сходится: вклад -47 ₽',
+  mape_pct: null,
+  mape_status: 'not_applicable_no_ai_runs',
+  risk_score: 0.82,
+  risk_scale: '0-1 (0 — низкий, 1 — критический)',
+  confidence_in_verdict: 0.6,
+  confidence_reason: 'куратор на Н2–Н4 унаследован',
+  gaps_ranked: [
+    { rank: 1, gap: 'структурная юнит-экономика', impact_rub_day: -62700, evidence: 'вклад -47 ₽ × 1320 заказов', fixability: 'high' },
+    { rank: 2, gap: 'ТМЦ 32%', impact_rub_day: -47124, evidence: 'tmc_pct 32', fixability: 'high' }
+  ],
+  top_effect_action: 'Пересобрать экономику заказа',
+  next_3_weeks: [
+    { week: 7, leading: { contribution_rub_per_order: 0 }, lagging: { profit_rub_day: -150000 } },
+    { week: 8, leading: { contribution_rub_per_order: 5 }, lagging: { profit_rub_day: -100000 } },
+    { week: 9, leading: { contribution_rub_per_order: 10 }, lagging: { profit_rub_day: -50000 } }
+  ],
+  do_not_do: ['не масштабировать объём, пока вклад с заказа < 0'],
+  benchmark_status: 'not_connected'
+};
+getEl('evalJsonIn').value = JSON.stringify(goodEval);
+getEl('checkEvalBtn').click();
+assert(getEl('evalStatus').textContent.includes('Оценка принята'), 'корректная оценка принята');
+assert(getEl('evalStatus').style.color === '#0b8a4b', 'принятая оценка отмечена зелёным');
+assert(JSON.parse(store['darkstore_profit_live_v5']).evaluations.length === 1, 'оценка сохранена в localStorage');
+
+getEl('evalJsonIn').value = JSON.stringify({ verdict: 'x', mape_pct: 0, mape_status: 'ok', risk_score: 'высокий' });
+getEl('checkEvalBtn').click();
+assert(getEl('evalStatus').textContent.includes('не принята'), 'некорректная оценка отклонена');
+assert(getEl('evalStatus').style.color === '#b42318', 'отклонённая оценка отмечена красным');
+assert(JSON.parse(store['darkstore_profit_live_v5']).evaluations.length === 1, 'отклонённая оценка не сохраняется');
+
+// ---------- строгий гейт: отчёт без полных данных не собирается ----------
+getEl('finalBtn').click();
+assert(getEl('aiApplyStatus').textContent.includes('Анализ заблокирован'), 'финальный отчёт заблокирован при неполных данных');
+assert(getEl('aiApplyStatus').style.color === '#b42318', 'блокировка показана красным');
+assert(getEl('finalOut').value === '', 'отчёт не собран, пока данные неполные');
+assert(getEl('promptWeek').textContent === '1', 'интерфейс перешёл к первой неполной неделе');
+assert(t.readiness().ready === false, 'готовность анализа = false');
+
+const FULL_W1 = {
+  zonesCount: '6', ordersPerZoneDay: '220', cost: '600', marginPct: '30', courierCost: '150',
+  kL: '0.5', kA: '0.7', kT: '1', kE: '0.3', kC: '1', curatorThreshold: '90', curatorPenaltyPct: '5',
+  lateness: '7', appeals: '5', tmc: '100', exits: '95',
+  curatorProcess: '90', curatorAutonomy: '90', curatorKpi: '90', curatorTraining: '90', curatorInvolvement: '90'
+};
+t.buildState({
+  1: FULL_W1,
+  2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 8, appeals2: 7, exits2: 91, cost2: 160 },
+  3: { lateness3: 7, appeals3: 6, exits3: 93, tmc3: 95, cost3: 160 },
+  4: { lateness4: 6.5, appeals4: 5.5, exits4: 94, tmc4: 97, cost4: 165 },
+  5: { lateness5: 6, appeals5: 5, tmc5: 98, exits5: 96, cost5: 165, curatorAutonomy5: 75, curatorKpi5: 70, curatorTraining5: 80, curatorInvolvement5: 70 },
+  6: { lateness6: 6, appeals6: 4, tmc6: 100, exits6: 95, cost6: 165, curatorAutonomy6: 90, curatorKpi6: 90, curatorTraining6: 90, curatorInvolvement6: 90, finalPlan: 'Держать KPI' }
+});
+t.setWeek(6);
+assert(t.readiness().ready === true, 'все недели заполнены -> готовность анализа = true');
+
+getEl('finalBtn').click();
+assert(getEl('finalOut').value.includes('# ИТОГОВЫЙ ОТЧЁТ'), 'final report rendered on complete data');
+assert(getEl('finalBlock').style.display === 'block', 'final report block shown');
+assert(getEl('finalOut').value.includes('MAPE'), 'final report has MAPE');
+assert(getEl('finalOut').value.includes('"analysis_ready": true'), 'в отчёте флаг готовности анализа');
+assert(getEl('finalOut').value.includes('"gates_passed": true'), 'на полных данных гейты проходят');
+assert(getEl('finalOut').value.includes('evaluation/2'), 'в отчёте описана схема оценки evaluation/2');
+assert(getEl('finalOut').value.includes('"evaluations"'), 'оценки ИИ попадают в сводку отчёта');
+assert(getEl('finalOut').value.includes('Обучение и вовлечённость куратора влияют на маржу через потери'), 'в отчёте объяснено влияние куратора');
+assert(store['darkstore_profit_live_v5'].includes('finalReport'), 'final report persisted');
+
+// --- интерфейс: у каждого обязательного поля недели должен быть контрол в форме ---
+const REQUIRED_CONTROLS = {
+  1: ['zonesCount','ordersPerZoneDay','cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct',
+      'lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'],
+  2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2'],
+  3: ['lateness3','appeals3','exits3','tmc3','cost3'],
+  4: ['lateness4','appeals4','exits4','tmc4','cost4'],
+  5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
+  6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
+};
+for (let w = 1; w <= 6; w++) {
+  t.setWeek(w);
+  t.render(true);
+  const formHtml = getEl('questions').innerHTML;
+  const missing = REQUIRED_CONTROLS[w].filter(id => formHtml.indexOf('data-id="' + id + '"') === -1);
+  assert(missing.length === 0, 'неделя ' + w + ': у всех обязательных полей есть контрол в форме (нет: ' + (missing.join(', ') || '—') + ')');
+  assert(formHtml.indexOf('confirmWeekBtn') !== -1, 'неделя ' + w + ': есть кнопка подтверждения значений');
+  assert(formHtml.indexOf('Полнота данных') !== -1, 'неделя ' + w + ': видна карточка полноты данных');
+}
 
 console.log('\nDONE');

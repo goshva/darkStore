@@ -17,6 +17,7 @@
   .weeks { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:10px 0 4px; }
   .wk { padding:10px 4px; border-radius:10px; border:1px solid var(--line); background:#fff; text-align:center; font-weight:700; font-size:14px; }
   .wk.done { background:#effaf4; border-color:var(--acc); color:var(--acc2); }
+  .wk.review { background:#fff7e6; border-color:#f79009; color:#b54708; }
   .wk.active { background:var(--acc); border-color:var(--acc); color:#fff; }
   .wk small { display:block; font-weight:400; font-size:12px; opacity:.8; }
   .q { margin:14px 0; }
@@ -123,7 +124,7 @@
   #ytBar.good { background:#0b8a4b; }
 
   /* Живая легенда */
-  #liveLegend { position:sticky; top:8px; z-index:50; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:10px 0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+  #liveLegend { top:8px; z-index:50; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:10px 0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
   #liveLegend .row1 { display:flex; justify-content:space-between; align-items:center; gap:10px; }
   #liveLegend .status { font-weight:700; }
   #liveLegend .status.low { color:var(--warn); }
@@ -160,6 +161,25 @@
   <div class="contrib" id="liveContrib"></div>
 </div>
 
+<div class="card" id="migrationNotice" style="display:none;">
+  <h2>Проект обновлён</h2>
+  <div class="hint" id="migrationText"></div>
+  <div class="ai-actions"><button type="button" class="mini-btn primary" id="migrationOkBtn">Понятно, перейти к проверке недель</button></div>
+</div>
+
+<div class="card" id="benchmarkCard" style="display:none;">
+  <h2>Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2>
+  <div class="hint">Чтобы сравнить даркстор с рынком, укажите рыночные значения и источник с датой. Без источника бенчмарк не принимается: ИИ должен опираться на ваши числа, а не выдумывать их.</div>
+  <div id="benchmarkForm"></div>
+  <div class="hint" id="benchmarkStatus"></div>
+  <div class="ai-actions">
+    <button type="button" class="mini-btn primary" id="benchmarkSaveBtn">Сохранить бенчмарки</button>
+    <button type="button" class="mini-btn" id="benchmarkSkipBtn">Нет данных — без бенчмарков</button>
+    <button type="button" class="mini-btn" id="benchmarkEditBtn">Изменить</button>
+  </div>
+  <div id="benchmarkSummary" class="hint"></div>
+</div>
+
 <div class="card">
   <div class="weeks" id="weeks"></div>
   <div class="hint" id="weekHint"></div>
@@ -191,12 +211,18 @@
     </div>
     <div class="ai-block">
       <div class="ai-head"><b>Ответ ИИ (JSON)</b><button type="button" class="mini-btn primary" id="applyAiBtn">Проверить и применить</button></div>
-      <textarea id="aiJsonIn" placeholder='{"strategy_name": "…", "actions": [...], "expected_profit_rub_day": 0, ...}'></textarea>
+      <textarea id="aiJsonIn" placeholder='{"strategy_name": "…", "actions": [...], "expected": {...}, ...}'></textarea>
       <div class="hint" id="aiApplyStatus">Ожидание ответа ИИ.</div>
+    </div>
+    <div class="ai-block">
+      <div class="ai-head"><b>Оценка от ИИ-оценщика (JSON, evaluation/2)</b><button type="button" class="mini-btn" id="checkEvalBtn">Проверить оценку</button></div>
+      <textarea id="evalJsonIn" placeholder='{"schema_version": "evaluation/2", "verdict": "…", "mape_pct": null, "mape_status": "not_applicable_no_ai_runs", "risk_score": 0.8, "risk_scale": "0-1", "confidence_in_verdict": 0.6, "gaps_ranked": [...], "top_effect_action": "…", "next_3_weeks": [...]}'></textarea>
+      <div class="hint" id="evalStatus">Вставьте ответ ИИ по финальному отчёту (раздел 7) — проверка схемы evaluation/2.</div>
     </div>
     <div class="ai-actions">
       <button type="button" class="mini-btn" id="exportBtn">Экспорт JSON</button>
       <label class="file-btn">Загрузить проект<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+      <button type="button" class="mini-btn" id="benchmarkOpenBtn">Бенчмарки рынка</button>
       <button type="button" class="mini-btn ai" id="finalBtn">Финальный отчёт</button>
     </div>
     <div class="ai-block" id="finalBlock" style="display:none;">
@@ -215,7 +241,11 @@
 
 <script>
 (function () {
-  var KEY = 'darkstore_profit_live_v4';
+  var KEY = 'darkstore_profit_live_v5';
+  var LEGACY_KEYS = ['darkstore_profit_live_v4', 'darkstore_profit_live_v3', 'darkstore_profit_live_v2'];
+  var STATE_VERSION = 2;                    // 1 = сохранения до 1.3.x (без качества данных и новых полей), 2 = текущая схема
+  var MIGRATION_MODEL = '1.3.0';            // с этой версии формула другая: множитель куратора и штраф всегда ухудшает результат
+  var BACKUP_PREFIX = 'darkstore_backup_';
   var TOTAL_WEEKS = 6;
   var currentWeek = 1;
   var state = { weeks: {}, currentWeek: 1 };
@@ -247,11 +277,17 @@
     curatorAutonomy5:3, curatorKpi5:3, tmc5:4, lateness5:4, appeals5:4,
     courierForecast:2, stabilityPlan:2,
     lateness6:4, appeals6:4, tmc6:4, curatorAutonomy6:3, curatorKpi6:3, exits6:3,
-    autonomous:2, finalPlan:2
+    autonomous:2, finalPlan:2,
+    // модель 1.3.0: обучение и вовлечённость куратора влияют на маржу через потери
+    kC:3, curatorTraining:3, curatorInvolvement:3, targetProfitPerOrder:2,
+    exits5:4, cost5:3, curatorTraining5:3, curatorInvolvement5:3,
+    cost6:3, curatorTraining6:3, curatorInvolvement6:3
   };
 
   function fieldMax(id) {
     if (id === 'marginPct') return 80;
+    if (id === 'kC') return 3;
+    if (id === 'targetProfitPerOrder') return 200;
     if (id === 'courierCost') return 500;
     if (id === 'kL' || id === 'kA' || id === 'kT' || id === 'kE') return 5;
     if (id === 'curatorThreshold') return 100;
@@ -290,12 +326,468 @@
     return Math.min(1, v / max);
   }
 
-  // ---------- сохранение ----------
-  function save() { state.currentWeek = currentWeek; localStorage.setItem(KEY, JSON.stringify(state)); }
+  // ---------- полнота данных (строгий режим) ----------
+  // Анализ считается точным только тогда, когда ВСЕ обязательные поля ВСЕХ недель введены пользователем.
+  // Унаследованное из недели 1 и дефолтное значение заполнением НЕ считается.
+  var FIELD_LABELS = {
+    zonesCount:'Количество Зисов', ordersPerZoneDay:'Заказов в день на Зис', cost:'Средний чек заказа',
+    marginPct:'Маржа даркстора, %', courierCost:'Ставка курьеру за заказ',
+    kL:'Вес потерь: опоздания', kA:'Вес потерь: обращения', kT:'Вес потерь: ТМЦ', kE:'Вес потерь: выходы',
+    kC:'Влияние куратора на потери', curatorThreshold:'Порог готовности куратора', curatorPenaltyPct:'Штраф куратора',
+    targetProfitPerOrder:'Целевая прибыль с заказа (буфер)',
+    lateness:'Опоздания, %', appeals:'Обращения, %', tmc:'Обеспеченность ТМЦ, %', exits:'Выход по слотам, %',
+    curatorProcess:'Понимание процессов куратором, %', curatorAutonomy:'Автономность куратора, %',
+    curatorKpi:'Готовность куратора к KPI, %', curatorTraining:'Обучение куратора, %', curatorInvolvement:'Вовлечённость куратора, %',
+    zoneOrders2:'Заказов на Зис (Н2)', zoneCouriers2:'Курьеров на Зис (Н2)',
+    lateness2:'Опоздания, % (Н2)', appeals2:'Обращения, % (Н2)', exits2:'Выход по слотам, % (Н2)', tmc2:'ТМЦ, % (Н2)', cost2:'Ставка курьеру (Н2)',
+    lateness3:'Опоздания, % (Н3)', appeals3:'Обращения, % (Н3)', exits3:'Выход по слотам, % (Н3)', tmc3:'ТМЦ, % (Н3)', cost3:'Ставка курьеру (Н3)',
+    lateness4:'Опоздания, % (Н4)', appeals4:'Обращения, % (Н4)', exits4:'Выход по слотам, % (Н4)', tmc4:'ТМЦ, % (Н4)', cost4:'Ставка курьеру (Н4)',
+    lateness5:'Опоздания, % (Н5)', appeals5:'Обращения, % (Н5)', tmc5:'ТМЦ, % (Н5)', exits5:'Выход по слотам, % (Н5)', cost5:'Ставка курьеру (Н5)',
+    curatorAutonomy5:'Автономность куратора, % (Н5)', curatorKpi5:'Готовность куратора к KPI, % (Н5)',
+    curatorTraining5:'Обучение куратора, % (Н5)', curatorInvolvement5:'Вовлечённость куратора, % (Н5)',
+    lateness6:'Опоздания, % (Н6)', appeals6:'Обращения, % (Н6)', tmc6:'ТМЦ, % (Н6)', exits6:'Выход по слотам, % (Н6)', cost6:'Ставка курьеру (Н6)',
+    curatorAutonomy6:'Автономность куратора, % (Н6)', curatorKpi6:'Готовность куратора к KPI, % (Н6)',
+    curatorTraining6:'Обучение куратора, % (Н6)', curatorInvolvement6:'Вовлечённость куратора, % (Н6)'
+  };
+  var REQUIRED_BASE = {
+    1: ['zonesCount','ordersPerZoneDay','cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct',
+        'lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'],
+    2: ['zoneOrders2','zoneCouriers2','lateness2','appeals2','exits2','cost2'],
+    3: ['lateness3','appeals3','exits3','tmc3','cost3'],
+    4: ['lateness4','appeals4','exits4','tmc4','cost4'],
+    5: ['lateness5','appeals5','tmc5','exits5','cost5','curatorAutonomy5','curatorKpi5','curatorTraining5','curatorInvolvement5'],
+    6: ['lateness6','appeals6','tmc6','exits6','cost6','curatorAutonomy6','curatorKpi6','curatorTraining6','curatorInvolvement6']
+  };
+  function requiredFields(w) {
+    var list = (REQUIRED_BASE[w] || []).slice();
+    if (w === 2 && num(weekData(1).tmc) < 100) list.push('tmc2'); // условное поле: показывается только при ТМЦ < 100%
+    return list;
+  }
+  function fieldLabel(id) { return FIELD_LABELS[id] || id; }
+  function enteredIn(d, id) {
+    var v = (d || {})[id];
+    if (v === undefined || v === null || v === '') return false;
+    if (Array.isArray(v)) return v.length > 0;
+    return true;
+  }
+  function fieldIsEntered(w, id) {
+    var d = weekData(w) || {};
+    if (enteredIn(d, id)) return true;
+    // Совместимость со старыми сохранениями: метрика недели 2–6 могла лежать без суффикса.
+    // Ровно те ключи, которые mergedForWeek читает и без суффикса (ставка cost — только с суффиксом).
+    if (w > 1 && /^(lateness|appeals|tmc|exits|curator[A-Za-z]*)\d+$/.test(id)) {
+      return enteredIn(d, id.replace(/\d+$/, ''));
+    }
+    return false;
+  }
+  function weekCoverage(w) {
+    var need = requiredFields(w), missing = [];
+    need.forEach(function (id) { if (!fieldIsEntered(w, id)) missing.push(id); });
+    var filled = need.length - missing.length;
+    return {
+      week: w, required: need.length, filled: filled,
+      pct: need.length ? Math.round(filled / need.length * 100) : 0,
+      missing: missing, missingLabels: missing.map(fieldLabel), complete: missing.length === 0
+    };
+  }
+  function weekComplete(w) { return weekCoverage(w).complete; }
+  function reportReadiness() {
+    var incomplete = [], missingTotal = 0, reviewWeeks = [];
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var c = weekCoverage(w);
+      if (state.needsReview && state.needsReview[String(w)]) {
+        reviewWeeks.push(w);
+        c = { week: c.week, required: c.required, filled: c.filled, pct: c.pct, missing: c.missing,
+          missingLabels: c.missingLabels, complete: false, needsReview: true,
+          reviewNote: 'неделя сохранена под старой версией модели — подтвердите значения' };
+      }
+      if (!c.complete) { incomplete.push(c); missingTotal += c.missing.length; }
+    }
+    return { ready: incomplete.length === 0, incomplete: incomplete, missingTotal: missingTotal,
+      completeWeeks: TOTAL_WEEKS - incomplete.length, totalWeeks: TOTAL_WEEKS, reviewWeeks: reviewWeeks };
+  }
+  // Откуда взято значение метрики в расчёте недели: введено / унаследовано из недели 1 / дефолт модели
+  function metricSource(w, key) {
+    var d = weekData(w) || {};
+    var k = key + (w === 1 ? '' : w);
+    if (d[k] !== undefined && d[k] !== '') return 'entered';
+    if (d[key] !== undefined && d[key] !== '') return 'entered';
+    var base = weekData(1) || {};
+    if (base[key] !== undefined && base[key] !== '') return 'inherited_week_1';
+    return 'default';
+  }
+
+  // ---------- качество данных недели ----------
+  // Полнота отвечает на вопрос «поле введено», качество — «данные про ЭТУ неделю».
+  // Введено = 1, унаследовано из недели 1 = 0.5, дефолт модели = 0.
+  var QUALITY_LABELS = { lateness:'Опоздания', appeals:'Обращения', tmc:'ТМЦ', exits:'Выходы', curator:'Куратор' };
+  var CURATOR_KEYS = ['curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'];
+
+  function qualitySource(w, key) {
+    if (key !== 'curator') return metricSource(w, key);
+    var entered = CURATOR_KEYS.filter(function (k) { return metricSource(w, k) === 'entered'; });
+    if (entered.length >= 3) return 'entered';                 // индекс готовности опирается в основном на измерения недели
+    if (entered.length > 0) return 'inherited_week_1';
+    return metricSource(w, 'curatorAutonomy') === 'default' ? 'default' : 'inherited_week_1';
+  }
+
+  function dataQualityOf(w) {
+    var d = weekData(w) || {};
+    var measured = {}, issues = [], sum = 0, count = 0;
+    if (!Object.keys(d).length) {
+      ['lateness','appeals','tmc','exits','curator'].forEach(function (k) { measured[k] = false; });
+      return { score: 0, measured: measured, measured_count: 0, measured_total: 5, curator_components_entered: 0,
+        issues: ['неделя не заполнена — метрики не введены'] };
+    }
+    var enteredCur = CURATOR_KEYS.filter(function (k) { return metricSource(w, k) === 'entered'; }).length;
+    ['lateness','appeals','tmc','exits','curator'].forEach(function (key) {
+      var src = qualitySource(w, key);
+      var weight;
+      if (key === 'curator') {
+        // частичное измерение куратора даёт частичный вес: 5 из 5 = 1, 4 из 5 = 0.9, ни одной = 0.5 (значения из недели 1)
+        weight = enteredCur > 0 ? 0.5 + 0.5 * enteredCur / CURATOR_KEYS.length : (src === 'default' ? 0 : 0.5);
+      } else {
+        weight = src === 'entered' ? 1 : (src === 'inherited_week_1' ? 0.5 : 0);
+      }
+      measured[key] = key === 'curator' ? enteredCur >= 3 : src === 'entered';
+      sum += weight;
+      count++;
+      if (key !== 'curator') {
+        if (src === 'inherited_week_1') issues.push(QUALITY_LABELS[key] + ': значение из недели 1 — на этой неделе не измерялось');
+        else if (src === 'default') issues.push(QUALITY_LABELS[key] + ': не введено, взят дефолт модели');
+      }
+    });
+    if (enteredCur === 0) {
+      issues.push('Куратор: ни одна из ' + CURATOR_KEYS.length + ' компонент не измерена' + (qualitySource(w, 'curator') === 'default' ? ' — взяты дефолты модели' : ' — значения из недели 1'));
+    } else if (enteredCur < CURATOR_KEYS.length) {
+      var missingCur = CURATOR_KEYS.filter(function (k) { return metricSource(w, k) !== 'entered'; });
+      issues.push('Куратор: измерено ' + enteredCur + ' из ' + CURATOR_KEYS.length + ' компонент (' + missingCur.map(fieldLabel).join(', ') + ' — из недели 1)');
+    }
+    var measuredCount = Object.keys(measured).filter(function (k) { return measured[k]; }).length;
+    return {
+      score: Math.round(sum / count * 100) / 100,
+      measured: measured,
+      measured_count: measuredCount,
+      measured_total: count,
+      curator_components_entered: enteredCur,
+      issues: issues
+    };
+  }
+
+  function projectDataQuality() {
+    var sum = 0, n = 0, issues = [];
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      if (!profitForWeek(w)) continue;
+      var q = dataQualityOf(w);
+      sum += q.score; n++;
+      if (q.score < 1) issues.push('Н' + w + ': ' + q.issues.join('; '));
+    }
+    return { score: n ? Math.round(sum / n * 100) / 100 : 0, weeks: n, issues: issues };
+  }
+
+  // ---------- сохранение и миграция ----------
+  function versionRank(v) { return String(v == null ? '' : v).split('.').map(function (x) { return parseInt(x, 10) || 0; }); }
+  function modelOlderThan(a, b) {
+    var A = versionRank(a), B = versionRank(b);
+    for (var i = 0; i < Math.max(A.length, B.length); i++) {
+      var x = A[i] || 0, y = B[i] || 0;
+      if (x !== y) return x < y;
+    }
+    return false;
+  }
+  function detectStateVersion(d) {
+    if (!d || typeof d !== 'object') return STATE_VERSION;
+    if (typeof d.state_version === 'number') return d.state_version;
+    return 1;   // сохранения до версионирования
+  }
+
+  function backupRaw(legacyKey, raw) {
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf(BACKUP_PREFIX) === 0) localStorage.removeItem(k);   // держим только последнюю копию
+      });
+    } catch (e) {}
+    try { localStorage.setItem(BACKUP_PREFIX + legacyKey + '_' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'), raw); } catch (e) {}
+  }
+
+  // Приводит сохранение (или экспорт) к текущей схеме. Данные не теряются: недели помечаются needsReview,
+  // потому что при смене формулы прибыль пересчитывается и старые числа больше не совпадают.
+  function migrateState(d, fromKey) {
+    var from = detectStateVersion(d);
+    var savedModel = d.model_version || null;
+    var weeks = (d.weeks && typeof d.weeks === 'object') ? d.weeks : {};
+    var needsReview = {};
+    var changed = [];
+    if (from < STATE_VERSION) {
+      Object.keys(weeks).forEach(function (k) {
+        if (!weeks[k] || !Object.keys(weeks[k]).length) return;
+        needsReview[k] = true;
+        changed.push(Number(k));
+      });
+    } else {
+      needsReview = d.needs_review || {};
+    }
+    var migratedFrom = from < STATE_VERSION ? (savedModel || 'до 1.3.0') : (d.migrated_from || null);
+    var notice = '';
+    if (from < STATE_VERSION) {
+      notice = 'Проект перенесён из версии ' + (savedModel || 'раньше 1.3.0') + ' (схема состояния ' + from + ' → ' + STATE_VERSION + '). ' +
+        'Формула прибыли изменилась: потери умножаются на дефицит готовности куратора, штраф куратора всегда ухудшает результат, а у недель 5–6 появились обязательные поля (выходы и ставка). ' +
+        'Недели ' + (changed.length ? changed.join(', ') : '—') + ' помечены «проверить»: подтвердите значения кнопкой «Подтвердить показанные значения», иначе итоговый отчёт заблокирован. ' +
+        'Старая копия сохранена в localStorage (' + BACKUP_PREFIX + '…).';
+    }
+    return {
+      state: {
+        state_version: STATE_VERSION,
+        model_version_saved: savedModel,
+        saved_at: d.saved_at || d.exported_at || null,
+        migrated_from: migratedFrom,
+        migration_notice: notice || d.migration_notice || '',
+        weeks: weeks,
+        needsReview: needsReview,
+        benchmarks: d.benchmarks || {},
+        benchmarkAsked: d.benchmarkAsked != null ? !!d.benchmarkAsked : !!d.benchmark_asked,
+        aiRuns: d.aiRuns || d.ai_runs || {},
+        evaluations: d.evaluations || [],
+        finalReport: d.finalReport || d.final_report || '',
+        currentWeek: Math.max(1, Math.min(TOTAL_WEEKS, parseInt(d.currentWeek != null ? d.currentWeek : d.current_week, 10) || 1))
+      },
+      from: from, changed: changed, notice: notice
+    };
+  }
+
+  function applyState(s) {
+    state.weeks = s.weeks || {};
+    state.aiRuns = s.aiRuns || {};
+    state.evaluations = s.evaluations || [];
+    state.needsReview = s.needsReview || {};
+    state.benchmarks = s.benchmarks || {};
+    state.benchmarkAsked = !!s.benchmarkAsked;
+    state.finalReport = s.finalReport || '';
+    state.stateVersion = s.state_version || STATE_VERSION;
+    state.migratedFrom = s.migrated_from || null;
+    state.modelVersionSaved = s.model_version_saved || null;
+    state.migrationNotice = s.migration_notice || '';
+    currentWeek = Math.max(1, Math.min(TOTAL_WEEKS, parseInt(s.currentWeek, 10) || 1));
+  }
+
+  function save() {
+    state.currentWeek = currentWeek;
+    var payload = {
+      state_version: STATE_VERSION,
+      model_version: MODEL_VERSION,
+      saved_at: new Date().toISOString(),
+      currentWeek: currentWeek,
+      weeks: state.weeks,
+      aiRuns: state.aiRuns || {},
+      evaluations: state.evaluations || [],
+      needsReview: state.needsReview || {},
+      benchmarks: state.benchmarks || {},
+      benchmarkAsked: !!state.benchmarkAsked,
+      migrated_from: state.migratedFrom || null,
+      model_version_saved: state.modelVersionSaved || null,
+      finalReport: state.finalReport || ''
+    };
+    try { localStorage.setItem(KEY, JSON.stringify(payload)); }
+    catch (e) { setStatus('Не удалось сохранить проект: ' + e.message, true); }
+  }
+
   function load() {
-    var raw = localStorage.getItem(KEY);
+    var raw = null, key = KEY;
+    try { raw = localStorage.getItem(KEY); } catch (e) {}
+    if (!raw) {
+      for (var i = 0; i < LEGACY_KEYS.length; i++) {
+        var legacy = null;
+        try { legacy = localStorage.getItem(LEGACY_KEYS[i]); } catch (e2) {}
+        if (!legacy) continue;
+        backupRaw(LEGACY_KEYS[i], legacy);
+        key = LEGACY_KEYS[i];
+        raw = legacy;
+        break;
+      }
+    }
     if (!raw) return;
-    try { var d = JSON.parse(raw); state.weeks = d.weeks || {}; currentWeek = d.currentWeek || 1; state.aiRuns = d.aiRuns || {}; state.finalReport = d.finalReport || ''; } catch (e) {}
+    try {
+      var res = migrateState(JSON.parse(raw), key);
+      applyState(res.state);
+      if (res.notice) { state.migrationNotice = res.notice; }
+      save();
+    } catch (e3) {}
+  }
+
+  function markWeekReviewed(w) {
+    if (state.needsReview) delete state.needsReview[String(w)];
+    var left = Object.keys(state.needsReview || {});
+    if (!left.length) state.migrationNotice = '';
+  }
+  function weeksNeedingReview() {
+    return Object.keys(state.needsReview || {}).filter(function (k) { return state.needsReview[k]; }).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  // ---------- бенчмарки рынка ----------
+  // Пользователь заполняет их при старте: без источника и даты бенчмарк не принимается,
+  // чтобы в отчёте не появлялись выдуманные рыночные числа.
+  var BENCHMARK_METRICS = [
+    { key:'margin_pct', label:'Маржа даркстора, % от чека', unit:'%', better:'higher', hint:'цель — выше рынка' },
+    { key:'avg_check_rub', label:'Средний чек заказа, ₽', unit:'₽', better:'higher', hint:'цель — выше рынка' },
+    { key:'courier_rate_rub', label:'Ставка курьеру за заказ, ₽', unit:'₽', better:'lower', hint:'цель — ниже рынка' },
+    { key:'lateness_pct', label:'Опоздания, %', unit:'%', better:'lower', hint:'цель — ниже рынка' }
+  ];
+  var benchmarkEditing = false;
+
+  function benchmarksRaw() {
+    if (!state.benchmarks || typeof state.benchmarks !== 'object') state.benchmarks = {};
+    return state.benchmarks;
+  }
+
+  function benchmarkEntries() {
+    var raw = benchmarksRaw(), out = [];
+    BENCHMARK_METRICS.forEach(function (m) {
+      var b = raw[m.key];
+      if (!b) return;
+      var v = b.value;
+      if (v === '' || v == null || !isFinite(Number(v))) return;
+      out.push({ metric: m.label, metric_key: m.key, unit: m.unit, better: m.better, value: Number(v), source: b.source || '', date: b.date || '' });
+    });
+    return out;
+  }
+
+  function benchmarkStatusOf() {
+    var n = benchmarkEntries().length;
+    if (!n) return 'not_connected';
+    return n === BENCHMARK_METRICS.length ? 'connected' : 'partial';
+  }
+
+  function lastCompleteProfit() {
+    for (var w = TOTAL_WEEKS; w >= 1; w--) {
+      if (weekComplete(w)) { var p = profitForWeek(w); if (p) return p; }
+    }
+    return null;
+  }
+
+  function currentForBenchmark(key) {
+    var cal = calibration();
+    if (key === 'margin_pct') return cal.marginPct;
+    if (key === 'avg_check_rub') return cal.price;
+    if (key === 'courier_rate_rub') return cal.courierCost;
+    if (key === 'lateness_pct') { var p = lastCompleteProfit(); return p ? p.lateness : null; }
+    return null;
+  }
+
+  function benchmarkComparison() {
+    return benchmarkEntries().map(function (b) {
+      var cur = currentForBenchmark(b.metric_key);
+      var delta = (cur == null || !isFinite(cur)) ? null : Math.round((cur - b.value) * 10) / 10;
+      var verdict = delta == null ? '—'
+        : (Math.abs(delta) < 0.05 ? 'на уровне рынка' : (((b.better === 'higher') === (delta > 0)) ? 'лучше рынка' : 'хуже рынка'));
+      return { metric: b.metric, metric_key: b.metric_key, unit: b.unit, better: b.better,
+        market_value: b.value, current_value: cur, delta: delta, verdict: verdict, source: b.source, date: b.date };
+    });
+  }
+
+  // Проверка введённого: значение — число, источник и дата обязательны
+  function normalizeBenchmarks(input) {
+    var errors = [], value = {};
+    BENCHMARK_METRICS.forEach(function (m) {
+      var raw = input ? input[m.key] : null;
+      if (!raw || raw.value === '' || raw.value == null) return;
+      var n = Number(String(raw.value).replace(',', '.'));
+      if (!isFinite(n)) { errors.push(m.label + ': значение должно быть числом'); return; }
+      var source = String(raw.source == null ? '' : raw.source).trim();
+      var date = String(raw.date == null ? '' : raw.date).trim();
+      if (!source) { errors.push(m.label + ': укажите источник — без него бенчмарк не принимается'); return; }
+      if (!date) { errors.push(m.label + ': укажите дату выгрузки'); return; }
+      value[m.key] = { value: n, source: source, date: date };
+    });
+    return { ok: errors.length === 0, errors: errors, value: value };
+  }
+
+  function applyBenchmarks(value, asked) {
+    state.benchmarks = value || {};
+    state.benchmarkAsked = asked !== false;
+    save();
+  }
+
+  function renderBenchmarkCard() {
+    var card = document.getElementById('benchmarkCard');
+    if (!card) return;
+    var entries = benchmarkEntries();
+    var badge = document.getElementById('benchmarkBadge');
+    if (badge) {
+      badge.className = 'badge ' + (entries.length ? 'pos' : 'neg');
+      badge.textContent = entries.length ? entries.length + ' из ' + BENCHMARK_METRICS.length : 'нет данных';
+    }
+    var asked = !!state.benchmarkAsked;
+    var showForm = benchmarkEditing || (!entries.length && !asked);
+    card.style.display = (showForm || entries.length || !asked) ? 'block' : 'none';
+
+    var form = document.getElementById('benchmarkForm');
+    var summary = document.getElementById('benchmarkSummary');
+    var statusEl = document.getElementById('benchmarkStatus');
+    var raw = benchmarksRaw();
+    if (form) {
+      form.innerHTML = showForm ? BENCHMARK_METRICS.map(function (m) {
+        var b = raw[m.key] || {};
+        var cur = currentForBenchmark(m.key);
+        return '<div class="q" data-bm="' + m.key + '">' +
+          '<span class="label">' + esc(m.label) + ' <span class="hint">(' + esc(m.hint) + ')</span></span>' +
+          '<div class="grid2">' +
+            '<input type="text" inputmode="decimal" data-bm-value="' + m.key + '" placeholder="рынок, ' + esc(m.unit) + '" value="' + esc(b.value != null ? b.value : '') + '">' +
+            '<input type="text" data-bm-source="' + m.key + '" placeholder="источник (обязательно)" value="' + esc(b.source || '') + '">' +
+          '</div>' +
+          '<div class="grid2" style="margin-top:6px;">' +
+            '<input type="text" data-bm-date="' + m.key + '" placeholder="дата (ГГГГ-ММ-ДД)" value="' + esc(b.date || '') + '">' +
+            '<div class="hint">У нас: ' + (cur == null ? '—' : esc(String(cur)) + esc(m.unit)) + '</div>' +
+          '</div></div>';
+      }).join('') : '';
+    }
+    if (summary) {
+      summary.textContent = entries.length
+        ? entries.map(function (b) { return b.metric + ': рынок ' + b.value + b.unit + ' (' + b.source + ', ' + b.date + ')'; }).join(' · ')
+        : '';
+    }
+    if (statusEl && !showForm) {
+      statusEl.textContent = entries.length
+        ? 'Бенчмарки подключены: ' + benchmarkStatusOf() + '. Сравнение попадёт в отчёт и промпт.'
+        : 'Бенчмарки не подключены — в отчёте будет benchmark_status: not_connected, рыночные числа не подставляются.';
+    }
+    var saveBtn = document.getElementById('benchmarkSaveBtn');
+    var skipBtn = document.getElementById('benchmarkSkipBtn');
+    var editBtn = document.getElementById('benchmarkEditBtn');
+    if (saveBtn) saveBtn.style.display = showForm ? '' : 'none';
+    if (skipBtn) skipBtn.style.display = showForm ? '' : 'none';
+    if (editBtn) editBtn.style.display = showForm ? 'none' : '';
+  }
+
+  function setBenchmarkStatus(text, isErr) {
+    var el = document.getElementById('benchmarkStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isErr ? '#b42318' : '#0b8a4b';
+  }
+
+  function readBenchmarkForm() {
+    var input = {};
+    BENCHMARK_METRICS.forEach(function (m) {
+      function val(attr) {
+        var el = document.querySelector('[' + attr + '="' + m.key + '"]');
+        return el ? el.value : '';
+      }
+      input[m.key] = { value: val('data-bm-value'), source: val('data-bm-source'), date: val('data-bm-date') };
+    });
+    return input;
+  }
+
+  function saveBenchmarksFromForm() {
+    var res = normalizeBenchmarks(readBenchmarkForm());
+    if (!res.ok) { setBenchmarkStatus('Бенчмарки не сохранены: ' + res.errors.join('; '), true); return; }
+    var n = Object.keys(res.value).length;
+    applyBenchmarks(res.value, true);
+    benchmarkEditing = false;
+    renderBenchmarkCard();
+    updateAiReport();
+    setBenchmarkStatus(n
+      ? 'Сохранено бенчмарков: ' + n + ' из ' + BENCHMARK_METRICS.length + ' (' + benchmarkStatusOf() + ').'
+      : 'Бенчмарки не заполнены — рыночные числа в отчёт не попадут.', false);
   }
   function weekData(w) { return state.weeks[String(w)] || {}; }
   function setAnswer(id, value) {
@@ -328,14 +820,19 @@
       kA: d.kA !== undefined ? num(d.kA) : 0.7,
       kT: d.kT !== undefined ? num(d.kT) : 1.0,
       kE: d.kE !== undefined ? num(d.kE) : 0.3,
+      kC: d.kC !== undefined ? num(d.kC) : 1.0,
       curatorThreshold: d.curatorThreshold !== undefined ? num(d.curatorThreshold) : 90,
-      curatorPenaltyPct: d.curatorPenaltyPct !== undefined ? num(d.curatorPenaltyPct) : 5
+      curatorPenaltyPct: d.curatorPenaltyPct !== undefined ? num(d.curatorPenaltyPct) : 5,
+      targetProfitPerOrder: d.targetProfitPerOrder !== undefined ? num(d.targetProfitPerOrder) : 20
     };
   }
 
   // ---------- прибыль ----------
   // Дефолты метрик совпадают с дефолтами ползунков недели 1, иначе таблица показывает 0 там, где на экране 7%
-  var DEFAULT_METRICS = { lateness: 7, appeals: 5, tmc: 100, exits: 95, curator: 90 };
+  var DEFAULT_METRICS = { lateness: 7, appeals: 5, tmc: 100, exits: 95, curator: 90, curatorTraining: 90, curatorInvolvement: 90 };
+  // Индекс готовности куратора (сумма весов = 1). Обучение и вовлечённость влияют на маржу через потери:
+  // дефицит индекса до порога умножает операционные потери на kC% за каждый пункт дефицита.
+  var CURATOR_WEIGHTS = { process: 0.2, autonomy: 0.25, kpi: 0.2, training: 0.2, involvement: 0.15 };
 
   function calcProfitDetail(d, cal) {
     cal = cal || calibration();
@@ -357,19 +854,36 @@
     var lossApp = revenue * (cal.kA / 100) * appeals;
     var lossTmc = revenue * (cal.kT / 100) * (100 - tmc);
     var lossExits = revenue * (cal.kE / 100) * (100 - exits);
-    var loss = lossLate + lossApp + lossTmc + lossExits;
-    var cmin = Math.min(
-      d.curatorProcess != null ? num(d.curatorProcess) : DEFAULT_METRICS.curator,
-      d.curatorAutonomy != null ? num(d.curatorAutonomy) : DEFAULT_METRICS.curator,
-      d.curatorKpi != null ? num(d.curatorKpi) : DEFAULT_METRICS.curator);
+    var baseLoss = lossLate + lossApp + lossTmc + lossExits;
+    var cProcess = d.curatorProcess != null ? num(d.curatorProcess) : DEFAULT_METRICS.curator;
+    var cAutonomy = d.curatorAutonomy != null ? num(d.curatorAutonomy) : DEFAULT_METRICS.curator;
+    var cKpi = d.curatorKpi != null ? num(d.curatorKpi) : DEFAULT_METRICS.curator;
+    var cTraining = d.curatorTraining != null ? num(d.curatorTraining) : DEFAULT_METRICS.curatorTraining;
+    var cInvolve = d.curatorInvolvement != null ? num(d.curatorInvolvement) : DEFAULT_METRICS.curatorInvolvement;
+    var cmin = Math.min(cProcess, cAutonomy, cKpi, cTraining, cInvolve);
+    var curatorIndex = cProcess * CURATOR_WEIGHTS.process + cAutonomy * CURATOR_WEIGHTS.autonomy + cKpi * CURATOR_WEIGHTS.kpi +
+      cTraining * CURATOR_WEIGHTS.training + cInvolve * CURATOR_WEIGHTS.involvement;
+    var curatorGap = Math.max(0, cal.curatorThreshold - curatorIndex);
+    var curatorLossFactor = cal.kC / 100 * curatorGap;   // доля потерь, добавленная дефицитом готовности куратора
+    var lossCurator = baseLoss * curatorLossFactor;
+    var loss = baseLoss + lossCurator;
     var curatorPenalty = cmin < cal.curatorThreshold ? cal.curatorPenaltyPct / 100 : 0;
     var profitBefore = revenue - courierPay - loss;
-    var profit = profitBefore * (1 - curatorPenalty);
+    // Штраф всегда ухудшает результат: при убытке он увеличивает убыток, а не уменьшает его
+    var curatorPenaltyAmount = Math.abs(profitBefore) * curatorPenalty;
+    var profit = profitBefore - curatorPenaltyAmount;
+    // Разложение прибыли: сумма компонент должна давать прибыль, остаток (residual) — 0.
+    // Ненулевой остаток означает, что отчёт не сходится с моделью (другая версия или ручная правка чисел).
+    var structural = revenue - courierPay;                 // вклад объёма: заказы × вклад с заказа
+    var residual = profit - (structural - baseLoss - lossCurator - curatorPenaltyAmount);
     return { Q:Q, price:price, rate:rate, cost:rate, contribution:contribution, marginPct:marginPct, M:M, revenue:revenue, courierPay:courierPay,
       negativeUnit: contribution <= 0,
       lateness:lateness, appeals:appeals, tmc:tmc, exits:exits,
-      lossLate:lossLate, lossApp:lossApp, lossTmc:lossTmc, lossExits:lossExits, loss:loss,
-      curatorMin:cmin, curatorPenalty:curatorPenalty,
+      lossLate:lossLate, lossApp:lossApp, lossTmc:lossTmc, lossExits:lossExits, baseLoss:baseLoss, lossCurator:lossCurator, loss:loss,
+      curatorMin:cmin, curatorIndex:curatorIndex, curatorGap:curatorGap, curatorLossFactor:curatorLossFactor,
+      curatorProcess:cProcess, curatorAutonomy:cAutonomy, curatorKpi:cKpi, curatorTraining:cTraining, curatorInvolvement:cInvolve,
+      curatorPenalty:curatorPenalty, curatorPenaltyAmount:curatorPenaltyAmount,
+      structural:structural, residual:residual,
       profitBefore:Math.round(profitBefore), profit:Math.round(profit) };
   }
   function mergedForWeek(w) {
@@ -377,7 +891,7 @@
     if (!d || Object.keys(d).length === 0) return null;
     var base = weekData(1);
     var merged = Object.assign({}, base, d);
-    ['lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi'].forEach(function (k) {
+    ['lateness','appeals','tmc','exits','curatorProcess','curatorAutonomy','curatorKpi','curatorTraining','curatorInvolvement'].forEach(function (k) {
       var key = k + (w === 1 ? '' : w);
       if (d[key] != null) merged[k] = d[key];
       else if (d[k] != null) merged[k] = d[k];
@@ -390,18 +904,63 @@
     return m ? calcProfitDetail(m) : null;
   }
 
+  // Целевые KPI перезагрузки (те же, что в гейтах): по ним считается безубыточность «после исправления».
+  var TARGET_KPI = { lateness: 7, appeals: 5, tmc: 100, exits: 95 };
+
+  // Безубыточность: какую маржу с заказа нужно иметь, чтобы покрыть ставку курьера и текущие потери.
+  // Доля потерь берётся из модели, то есть уже включает множитель дефицита готовности куратора.
+  function breakevenOf(p, cal) {
+    cal = cal || calibration();
+    var f = p.revenue > 0 ? p.loss / p.revenue : 0;
+    var buffer = cal.targetProfitPerOrder;
+    var pct = p.marginPct / 100;
+    if (!(f < 1)) {
+      return { lossSharePct: Math.round(f * 1000) / 10, marginRub: null, priceRub: null, targetMarginRub: null, targetPriceRub: null,
+        currentMarginRub: Math.round(p.M * 10) / 10, currentPriceRub: p.price, gapRub: null, bufferRub: buffer, impossible: true };
+    }
+    var margin = p.rate / (1 - f);
+    var target = margin + buffer;
+    return {
+      lossSharePct: Math.round(f * 1000) / 10,
+      marginRub: Math.round(margin * 10) / 10,
+      priceRub: pct > 0 ? Math.round(margin / pct) : null,
+      targetMarginRub: Math.round(target * 10) / 10,
+      targetPriceRub: pct > 0 ? Math.round(target / pct) : null,
+      currentMarginRub: Math.round(p.M * 10) / 10,
+      currentPriceRub: p.price,
+      gapRub: Math.round((p.M - margin) * 10) / 10,     // отрицательный = дефицит маржи до безубыточности
+      bufferRub: buffer,
+      impossible: false
+    };
+  }
+
+  // Безубыточность «после исправления»: целевые KPI и куратор на пороге (множитель потерь = 1).
+  function breakevenAtTargetKpi(cal) {
+    cal = cal || calibration();
+    var f = cal.kL / 100 * TARGET_KPI.lateness + cal.kA / 100 * TARGET_KPI.appeals +
+      cal.kT / 100 * (100 - TARGET_KPI.tmc) + cal.kE / 100 * (100 - TARGET_KPI.exits);
+    var pct = cal.marginPct / 100;
+    var margin = f < 1 ? cal.courierCost / (1 - f) : null;
+    return {
+      target_kpi: TARGET_KPI,
+      loss_share_pct: Math.round(f * 1000) / 10,
+      breakeven_margin_rub: margin == null ? null : Math.round(margin * 10) / 10,
+      breakeven_price_rub: (margin != null && pct > 0) ? Math.round(margin / pct) : null,
+      required_margin_pct_at_current_price: (margin != null && cal.price > 0) ? Math.round(margin / cal.price * 1000) / 10 : null
+    };
+  }
+
   // ---------- оценка качества и прибыли ----------
   function calcQualityScore() {
-    var totalW = 0, sum = 0, contribs = [];
+    var cov = weekCoverage(currentWeek);
+    var contribs = [];
     var d = weekData(currentWeek);
     Object.keys(d).forEach(function (id) {
       var w = FIELD_WEIGHTS[id] || 1;
       var norm = fieldValueNorm(id, d[id]);
-      totalW += w;
-      sum += norm * w;
       contribs.push({ id:id, w:w, norm:norm, value:d[id] });
     });
-    var fill = totalW ? (sum / totalW) * 100 : 0;
+    var fill = cov.pct; // строго: доля введённых обязательных полей недели, а не среднее по введённым
     var p = profitForWeek(currentWeek);
     var profitScore = 50;
     var p1 = profitForWeek(1);
@@ -412,7 +971,7 @@
     }
     var score = Math.round(fill * 0.4 + profitScore * 0.6);
     contribs.sort(function (a, b) { return (b.norm * b.w) - (a.norm * a.w); });
-    return { score:score, fill:Math.round(fill), profitScore:Math.round(profitScore), contribs:contribs.slice(0,5) };
+    return { score:score, fill:Math.round(fill), profitScore:Math.round(profitScore), contribs:contribs.slice(0,5), coverage:cov };
   }
   function updateLiveBar() {
     var r = calcQualityScore();
@@ -429,23 +988,40 @@
       (r.score >= 40 ? 'Оценка: средние данные, есть риски' : 'Оценка: недостаточно данных');
     var pCur = profitForWeek(currentWeek);
     var econBroken = !!(pCur && (pCur.profit < 0 || pCur.contribution <= 0));
-    if (econBroken) {
-      bar.className = '';
-      statusEl.className = 'status low';
-      statusEl.textContent = pCur.contribution <= 0
-        ? 'Оценка: экономика заказа отрицательная (вклад ' + rub(pCur.contribution) + ')'
-        : 'Оценка: прибыль отрицательная (' + rub(pCur.profit) + '/день)';
+    var ready = reportReadiness();
+    var projQ = projectDataQuality();
+    var curQ = dataQualityOf(currentWeek);
+    var issues = [];
+    if (ready.reviewWeeks.length) issues.push('недель к проверке после переноса: ' + ready.reviewWeeks.join(', '));
+    if (!r.coverage.complete) issues.push('не хватает ' + r.coverage.missing.length + ' обязательных полей недели ' + currentWeek);
+    if (projQ.score < 0.8) issues.push('качество данных ' + projQ.score + ' из 1 — часть метрик унаследована');
+    if (econBroken) issues.push(pCur.contribution <= 0
+      ? 'экономика заказа отрицательная (вклад ' + rub(pCur.contribution) + ')'
+      : 'прибыль отрицательная (' + rub(pCur.profit) + '/день)');
+    if (issues.length) {
+      bar.className = econBroken ? '' : 'warn';
+      statusEl.className = 'status ' + (econBroken ? 'low' : 'mid');
+      statusEl.textContent = 'Оценка: ' + issues.join('; ');
     }
     var breakdownEl = document.getElementById('liveBreakdown');
     if (breakdownEl) {
-      breakdownEl.innerHTML = '<span>Заполненность: <b>' + r.fill + '%</b></span>' +
+      breakdownEl.innerHTML = '<span>Полнота недели: <b>' + r.fill + '%</b> (' + r.coverage.filled + '/' + r.coverage.required + ')</span>' +
+        '<span>Полных недель: <b>' + ready.completeWeeks + '/' + ready.totalWeeks + '</b></span>' +
+        '<span>Качество данных: <b>' + projQ.score + '</b> из 1 (неделя: ' + curQ.score + ', измерено ' + curQ.measured_count + '/' + curQ.measured_total + ')</span>' +
         (econBroken
           ? '<span>Прибыль: <b>убыток ' + rub(Math.abs(pCur.profit)) + '/день</b></span>'
           : '<span>Прибыль к baseline: <b>' + r.profitScore + '/100</b></span>') +
         (pCur ? '<span>Вклад с заказа: <b>' + rub(pCur.contribution) + '</b></span>' : '') +
-        '<span>Полосы ниже — топ-5 полей по вкладу</span>';
+        (ready.reviewWeeks.length ? '<span>К проверке: <b>Н' + ready.reviewWeeks.join(', Н') + '</b></span>' : '') +
+        (ready.ready ? '' : '<span>Анализ: <b>неточен — заполните все недели</b></span>');
     }
     var html = '';
+    r.coverage.missing.forEach(function (id) {
+      html += '<div class="c neg"><span class="nm">' + esc(fieldLabel(id)) + '</span><span class="b"><i style="width:0%"></i></span><span class="v">нет</span></div>';
+    });
+    curQ.issues.forEach(function (txt) {
+      html += '<div class="c neg"><span class="nm">' + esc(txt) + '</span><span class="b"><i style="width:0%"></i></span><span class="v">унасл.</span></div>';
+    });
     r.contribs.forEach(function (c) {
       var pct = Math.round(c.norm * 100);
       var neg = (c.id.indexOf('lateness') === 0 || c.id.indexOf('appeals') === 0) ? (c.norm < 0.8) : (c.norm < 0.5);
@@ -480,6 +1056,8 @@
       'Поддерживать: напоминания, бонус за полную смену.');
     if (p.curatorPenalty > 0) add('curator', 'Куратор ' + p.curatorMin + '% (<' + cal.curatorThreshold + '%)', p.profitBefore * p.curatorPenalty, p.profitBefore*p.curatorPenalty/revenue*100, true,
       'Довести до ≥' + cal.curatorThreshold + '%: наставник, чек-лист процессов, тест, перевод на KPI после сдачи.');
+    if (p.lossCurator > 0.5) add('curatorLoss', 'Готовность куратора ' + Math.round(p.curatorIndex) + '% (<' + cal.curatorThreshold + '%): потери +' + Math.round(p.curatorLossFactor * 100) + '%', p.lossCurator, p.lossCurator/revenue*100, true,
+      'Обучение и вовлечённость куратора снижают потери: план наставничества, чек-лист смены, разбор отклонений с куратором, мотивация за удержание метрик.');
     if (p.contribution <= 0) add('unit', 'Экономика заказа: вклад ' + rub(p.contribution), Math.abs(p.contribution) * p.Q, Math.abs(p.contribution) * p.Q / revenue * 100, true,
       'Вклад с заказа отрицательный: маржа ' + rub(p.M) + ' ≤ ставки курьера ' + rub(p.rate) + '. Поднять чек/маржу, снизить ставку или пересмотреть зону.');
     else if (p.contribution < p.M * 0.2) add('unit', 'Тонкий вклад с заказа: ' + rub(p.contribution), 0, 0, true,
@@ -515,6 +1093,7 @@
     h += row('Потери: обращения', -p.lossApp, p.lossApp > 0 ? 'neg' : 'pos');
     h += row('Потери: ТМЦ', -p.lossTmc, p.lossTmc > 0 ? 'neg' : 'pos');
     h += row('Потери: выходы', -p.lossExits, p.lossExits > 0 ? 'neg' : 'pos');
+    if (p.lossCurator > 0.5) h += row('Потери от дефицита готовности куратора', -p.lossCurator, 'neg');
     if (p.curatorPenalty > 0) h += row('Штраф куратора ' + Math.round(p.curatorPenalty*100) + '%', -(p.profitBefore * p.curatorPenalty), 'neg');
     h += row('Прибыль в день', p.profit, 'pos');
     h += '</div>';
@@ -540,10 +1119,14 @@
   function renderWeeks() {
     var html = '';
     for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var cw = weekCoverage(w);
+      var needsReview = !!(state.needsReview && state.needsReview[String(w)]);
       var cls = 'wk';
       if (w === currentWeek) cls += ' active';
-      else if (state.weeks[String(w)]) cls += ' done';
-      html += '<div class="' + cls + '" data-week="' + w + '">' + w + '<small>' + (state.weeks[String(w)] ? 'заполнена' : 'неделя') + '</small></div>';
+      else if (cw.complete && !needsReview) cls += ' done';
+      if (needsReview && w !== currentWeek) cls += ' review';
+      var sub = needsReview ? 'проверить' : (cw.complete ? 'заполнена' : (cw.filled ? cw.filled + '/' + cw.required : 'неделя'));
+      html += '<div class="' + cls + '" data-week="' + w + '">' + w + '<small>' + sub + '</small></div>';
     }
     weeksEl.innerHTML = html;
     weeksEl.querySelectorAll('.wk').forEach(function (el) {
@@ -635,11 +1218,52 @@
     return h;
   }
 
+  // Подтверждение показанных значений: записывает в неделю то, что видно на экране
+  // (включая дефолты ползунков) — только после этого поле считается заполненным.
+  function confirmVisibleFields() {
+    var w = currentWeek, n = 0;
+    questionsEl.querySelectorAll('input[type="range"][data-id]').forEach(function (r) {
+      var id = r.getAttribute('data-id');
+      if (id) { setAnswerFor(w, id, r.value); n++; }
+    });
+    questionsEl.querySelectorAll('input[type="text"][data-id], textarea[data-id], select[data-id]').forEach(function (el) {
+      var id = el.getAttribute('data-id');
+      if (id && el.value !== '') { setAnswerFor(w, id, el.value); n++; }
+    });
+    var radios = {};
+    questionsEl.querySelectorAll('input[type="radio"][data-id]').forEach(function (r) {
+      if (r.checked) radios[r.getAttribute('data-id')] = r.value;
+    });
+    Object.keys(radios).forEach(function (id) { setAnswerFor(w, id, radios[id]); n++; });
+    markWeekReviewed(w);
+    save();
+    render(true);
+    var cov = weekCoverage(w);
+    setStatus(cov.complete
+      ? 'Неделя ' + w + ' заполнена полностью (' + cov.filled + '/' + cov.required + ').'
+      : 'Неделя ' + w + ': подтверждено ' + n + ' значений, осталось ' + cov.missing.length + ' полей — ' + cov.missingLabels.join('; ') + '.', !cov.complete);
+  }
+
   function renderQuestions() {
     var w = currentWeek;
     var w1 = weekData(1);
     var wPrev = weekData(w - 1);
     var h = '';
+
+    // полнота данных: строгий режим — анализ точен только при 100% по всем неделям
+    var cov = weekCoverage(w);
+    var ready = reportReadiness();
+    h += '<div class="card"><h2>Неделя ' + w + '. Полнота данных' +
+      (cov.complete ? ' <span class="badge pos">заполнена</span>' : ' <span class="badge neg">не хватает ' + cov.missing.length + '</span>') + '</h2>';
+    h += '<div class="hint">Обязательных полей недели: ' + cov.required + ', заполнено ' + cov.filled + ' (' + cov.pct + '%). ' +
+      'Полных недель: ' + ready.completeWeeks + ' из ' + ready.totalWeeks + '. ' +
+      'Анализ считается точным только при 100% по всем неделям; унаследованные и дефолтные значения заполнением не считаются.</div>';
+    if (!cov.complete) h += '<div class="econ-warn">Не заполнено: ' + cov.missingLabels.map(esc).join('; ') + '</div>';
+    if (state.needsReview && state.needsReview[String(w)]) {
+      h += '<div class="econ-warn">Неделя помечена «проверить» после переноса проекта: числа пересчитаны по новой формуле (множитель готовности куратора, штраф всегда ухудшает результат). Проверьте значения и нажмите «Подтвердить показанные значения».</div>';
+    }
+    h += '<div class="ai-actions"><button type="button" class="mini-btn primary" id="confirmWeekBtn">Подтвердить показанные значения</button></div>';
+    h += '</div>';
 
     if (w === 1) {
       h += '<div class="card"><h2>Неделя 1. Диагностика</h2>';
@@ -669,6 +1293,8 @@
       h += fieldSlider('kE', 'Вес потерь от недобора выходов, % маржи на 1%', 0, 5, 0.1, 0.3, '');
       h += fieldSlider('curatorThreshold', 'Порог готовности куратора, %', 50, 100, 1, 90, 'Ниже порога — штраф к прибыли');
       h += fieldSlider('curatorPenaltyPct', 'Штраф за куратора ниже порога, %', 0, 30, 1, 5, '');
+      h += fieldSlider('kC', 'Влияние дефицита готовности куратора на потери, % потерь на 1% дефицита', 0, 3, 0.1, 1.0, 'Обучение и вовлечённость куратора влияют на маржу через потери: чем ниже индекс готовности, тем выше потери');
+      h += fieldSlider('targetProfitPerOrder', 'Целевая прибыль с заказа (буфер), руб.', 0, 200, 5, 20, 'Безубыточная маржа + этот буфер = целевая маржа в отчёте для ИИ');
       h += '</div>';
 
       h += '<div class="card"><h2>Неделя 1. Зисы и метрики</h2>';
@@ -684,6 +1310,8 @@
       h += fieldSlider('curatorProcess', 'Понимание процессов куратором, %', 0, 100, 1, 90, '');
       h += fieldSlider('curatorAutonomy', 'Автономность куратора, %', 0, 100, 1, 90, '');
       h += fieldSlider('curatorKpi', 'Готовность куратора к KPI, %', 0, 100, 1, 90, 'Цель к неделе 6: ≥90%');
+      h += fieldSlider('curatorTraining', 'Обучение куратора (наставничество), %', 0, 100, 1, 90, 'Входит в индекс готовности: влияет на потери');
+      h += fieldSlider('curatorInvolvement', 'Вовлечённость куратора, %', 0, 100, 1, 90, 'Входит в индекс готовности: влияет на потери');
       h += adaptive('followZone', 'Зис больше 250. План деления', fieldArea('zonePlan', '', 'Какой Зис делим и как'));
       h += adaptive('followCouriers', 'В Зисе больше 5 курьеров. План', fieldArea('courierPlan', '', 'Кого и куда переносим'));
       h += adaptive('followTmc', 'ТМЦ не 100%. План', fieldArea('tmcPlan', '', 'Позиции, ответственный, срок'));
@@ -738,6 +1366,10 @@
       h += fieldSlider('tmc5', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev['tmc4'])||num(wPrev.tmc)||100, 'Цель 100%');
       h += fieldSlider('lateness5', 'Опоздания на заказ, %', 0, 30, 0.5, num(wPrev['lateness4'])||num(wPrev.lateness)||6, 'Цель 5–7%');
       h += fieldSlider('appeals5', 'Обращения, %', 0, 30, 0.5, num(wPrev['appeals4'])||num(wPrev.appeals)||5, 'Цель 0–5%');
+      h += fieldSlider('exits5', 'Выход по слотам, %', 0, 100, 1, num(wPrev['exits4'])||num(wPrev.exits)||95, 'Считается только по этой неделе');
+      h += fieldSlider('cost5', 'Ставка курьеру за заказ, руб.', 0, 500, 5, num(wPrev['cost4'])||num(wPrev.courierCost)||150, 'Пересчитанная ставка по Зисам');
+      h += fieldSlider('curatorTraining5', 'Обучение куратора, %', 0, 100, 1, num(wPrev.curatorTraining)||90, 'Входит в индекс готовности: влияет на потери');
+      h += fieldSlider('curatorInvolvement5', 'Вовлечённость куратора, %', 0, 100, 1, num(wPrev.curatorInvolvement)||90, 'Входит в индекс готовности: влияет на потери');
       h += fieldRadio('courierForecast', 'Курьер прогнозирует заработок на завтра', ['да','нет','частично','другое']);
       h += fieldArea('stabilityPlan', 'Что стабилизируем на неделе 6', 'План');
       h += '</div>';
@@ -750,7 +1382,10 @@
       h += fieldSlider('tmc6', 'Обеспеченность ТМЦ, %', 0, 100, 1, num(wPrev.tmc5)||num(wPrev.tmc)||100, 'Цель 100%');
       h += fieldSlider('curatorAutonomy6', 'Автономность куратора, %', 0, 100, 1, num(wPrev.curatorAutonomy5)||num(wPrev.curatorAutonomy)||90, 'Цель ≥90%');
       h += fieldSlider('curatorKpi6', 'Готовность к KPI, %', 0, 100, 1, num(wPrev.curatorKpi5)||num(wPrev.curatorKpi)||90, 'Цель ≥90%');
+      h += fieldSlider('curatorTraining6', 'Обучение куратора, %', 0, 100, 1, num(wPrev.curatorTraining5)||num(wPrev.curatorTraining)||90, 'Входит в индекс готовности: влияет на потери');
+      h += fieldSlider('curatorInvolvement6', 'Вовлечённость куратора, %', 0, 100, 1, num(wPrev.curatorInvolvement5)||num(wPrev.curatorInvolvement)||90, 'Входит в индекс готовности: влияет на потери');
       h += fieldSlider('exits6', 'Выход по слотам, %', 0, 100, 1, num(wPrev['exits5'])||num(wPrev.exits)||95, '');
+      h += fieldSlider('cost6', 'Ставка курьеру за заказ, руб.', 0, 500, 5, num(wPrev['cost5'])||num(wPrev.courierCost)||150, 'Ставка, с которой закрываем перезагрузку');
       h += fieldRadio('autonomous', 'Куратор готов к самостоятельной работе', ['да','нет','частично','другое']);
       h += fieldArea('finalPlan', 'Что остаётся сделать после 6-й недели', 'План');
       h += '</div>';
@@ -765,6 +1400,9 @@
     }
 
     questionsEl.innerHTML = h;
+
+    var confirmBtn = document.getElementById('confirmWeekBtn');
+    if (confirmBtn) confirmBtn.addEventListener('click', confirmVisibleFields);
 
     // свои варианты
     questionsEl.querySelectorAll('input[type="radio"]').forEach(function (r) {
@@ -794,7 +1432,7 @@
         var q = r.closest('.q');
         if (q) { q.classList.remove('flash'); void q.offsetWidth; q.classList.add('flash'); }
         // если меняется калибровка — пересобрать блок прибыли
-        if (w === 1 && ['cost','marginPct','courierCost','kL','kA','kT','kE','curatorThreshold','curatorPenaltyPct','zonesCount','ordersPerZoneDay'].indexOf(id) !== -1) {
+        if (w === 1 && ['cost','marginPct','courierCost','kL','kA','kT','kE','kC','curatorThreshold','curatorPenaltyPct','zonesCount','ordersPerZoneDay','curatorTraining','curatorInvolvement'].indexOf(id) !== -1) {
           var block = document.getElementById('profitBlock');
           if (block) {
             var p2 = profitForWeek(currentWeek);
@@ -1272,8 +1910,9 @@
   }
 
   // ================= ЦИКЛ ИИ: ПРОМПТ → JSON → СЛЕДУЮЩАЯ НЕДЕЛЯ =================
-  var MODEL_VERSION = '1.2.0';
-  var SCHEMA_VERSION = 'strategy/1';
+  var MODEL_VERSION = '1.3.1';
+  var SCHEMA_VERSION = 'strategy/2';
+  var EVAL_SCHEMA_VERSION = 'evaluation/2';
   var aiPanelWeek = 0;
   var PLAN_RANGES = { courier_cost_rub: [0, 500], zone_orders: [180, 300], zone_couriers: [1, 10], zones_count: [1, 30], orders_per_zone_day: [50, 400], tmc_target_pct: [0, 100] };
   var PLAN_HELP = {
@@ -1303,6 +1942,48 @@
     el.style.color = isErr ? '#b42318' : '#0b8a4b';
   }
 
+  function setEvalStatus(text, isErr) {
+    var el = document.getElementById('evalStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isErr ? '#b42318' : '#0b8a4b';
+  }
+
+  function evaluations() { if (!state.evaluations) state.evaluations = []; return state.evaluations; }
+
+  function checkEvaluationFromText() {
+    var ta = document.getElementById('evalJsonIn');
+    if (!ta) return;
+    var text = (ta.value || '').trim();
+    if (!text) { setEvalStatus('Вставьте JSON-оценку ИИ.', true); return; }
+    var parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) { setEvalStatus('JSON не парсится: ' + e.message, true); return; }
+    var res = validateEvaluation(parsed, { runsWithFact: runsWithFact() });
+    if (!res.ok) {
+      setEvalStatus('Оценка не принята: ' + res.errors.slice(0, 5).join('; ') + (res.errors.length > 5 ? '; …' : ''), true);
+      return;
+    }
+    var v = res.value;
+    evaluations().push({ at: new Date().toISOString(), model: MODEL_VERSION, schema: EVAL_SCHEMA_VERSION, value: v, raw: text });
+    save();
+    var warn = res.warnings.length ? ' Замечания: ' + res.warnings.slice(0, 3).join('; ') + (res.warnings.length > 3 ? '; …' : '') + '.' : '';
+    setEvalStatus('Оценка принята: риск ' + v.risk_score + '/1 (' + v.risk_scale + '), MAPE ' +
+      (v.mape_pct === null ? 'нет данных (' + v.mape_status + ')' : v.mape_pct + '%') +
+      ', расхождений ' + v.gaps_ranked.length + ', «не делать» ' + v.do_not_do.length +
+      '. Сохранено (всего оценок: ' + evaluations().length + ').' + warn, false);
+    updateAiReport();
+  }
+
+  function runsWithFact() {
+    var n = 0;
+    Object.keys(runs()).forEach(function (k) {
+      var r = runs()[k];
+      if (r && r.toWeek && profitForWeek(r.toWeek)) n++;
+    });
+    return n;
+  }
+
   function copyText(text, btn) {
     var done = function () { var old = btn.textContent; btn.textContent = 'Скопировано'; setTimeout(function () { btn.textContent = old; }, 1200); };
     var fallback = function () {
@@ -1327,7 +2008,8 @@
       '- ТМЦ: цель 100% (сумка, терминал, форма, зарядка).',
       '- Telegram: группы «курьеры» и «кураторы» с подгруппами по Зисам.',
       '- Ставка за заказ ≤ ' + maxCost + ' ₽ (рост ≤50% к базовой ' + cal.courierCost + ' ₽); капитальные затраты и массовый наём не предлагать.',
-      '- Экономика: маржа с заказа (' + Math.round(cal.price * cal.marginPct / 100) + ' ₽ = чек ' + cal.price + ' ₽ × ' + cal.marginPct + '%) должна быть выше ставки курьера (' + cal.courierCost + ' ₽), иначе вклад с заказа отрицательный и рост объёмов увеличивает убыток.'
+      '- Экономика: маржа с заказа (' + Math.round(cal.price * cal.marginPct / 100) + ' ₽ = чек ' + cal.price + ' ₽ × ' + cal.marginPct + '%) должна быть выше ставки курьера (' + cal.courierCost + ' ₽), иначе вклад с заказа отрицательный и рост объёмов увеличивает убыток.',
+      '- Куратор: обучение и вовлечённость влияют на маржу через потери. Индекс готовности = 0.20×процессы + 0.25×автономность + 0.20×KPI + 0.20×обучение + 0.15×вовлечённость; каждый пункт дефицита до порога (' + cal.curatorThreshold + '%) умножает операционные потери на kC = ' + cal.kC + '%.'
     ];
   }
 
@@ -1365,15 +2047,48 @@
     L.push('### 4.1. Калибровка (неделя 1)');
     L.push('- Зисов: ' + cal.zonesCount + '; заказов в день на Зис: ' + cal.ordersPerZoneDay + '; итого заказов в день: ' + (cal.zonesCount * cal.ordersPerZoneDay) + '.');
     L.push('- Маржа: ' + cal.marginPct + '% от чека ' + cal.price + ' ₽ = ' + rub(cal.price * cal.marginPct / 100) + ' с заказа; ставка курьеру: ' + cal.courierCost + ' ₽/заказ; вклад: ' + rub(cal.price * cal.marginPct / 100 - cal.courierCost) + ' с заказа; оплата курьерам: ' + rub(cal.courierCost * cal.zonesCount * cal.ordersPerZoneDay) + '/день.');
-    L.push('- Куратор: порог ' + cal.curatorThreshold + '%, штраф ниже порога ' + cal.curatorPenaltyPct + '% прибыли.');
+    L.push('- Куратор: порог ' + cal.curatorThreshold + '%, штраф ниже порога ' + cal.curatorPenaltyPct + '% прибыли; индекс готовности = 0.20×процессы + 0.25×автономность + 0.20×KPI + 0.20×обучение + 0.15×вовлечённость, дефицит индекса до порога умножает потери на kC=' + cal.kC + '% за пункт. Обучение и вовлечённость куратора — рычаг маржи, а не только качество.');
+    if (p) {
+      var bePrompt = breakevenOf(p, cal);
+      L.push('- Безубыточность недели ' + week + ': доля потерь ' + bePrompt.lossSharePct + '% выручки' +
+        (bePrompt.impossible
+          ? ' — при доле ≥ 100% безубыточность недостижима: сначала снижай потери, потом маржу.'
+          : '; нужна маржа ≥ ' + rub(bePrompt.marginRub) + ' с заказа' + (bePrompt.priceRub != null ? ' (чек ≥ ' + rub(bePrompt.priceRub) + ' при марже ' + cal.marginPct + '%)' : '') +
+            '; текущая маржа ' + rub(bePrompt.currentMarginRub) + ' → ' + (bePrompt.gapRub < 0 ? 'дефицит ' + rub(Math.abs(bePrompt.gapRub)) : 'запас ' + rub(bePrompt.gapRub)) + ' с заказа. ' +
+            'Целевая маржа с буфером ' + rub(cal.targetProfitPerOrder) + ' — ' + rub(bePrompt.targetMarginRub) + ' с заказа' + (bePrompt.targetPriceRub != null ? ' (чек ' + rub(bePrompt.targetPriceRub) + ')' : '') + '.'));
+    }
+    var beKpiPrompt = breakevenAtTargetKpi(cal);
+    L.push('- Безубыточность при целевых KPI (' + TARGET_KPI.lateness + '% опозданий, ' + TARGET_KPI.appeals + '% обращений, ТМЦ ' + TARGET_KPI.tmc + '%, выходы ' + TARGET_KPI.exits + '%): доля потерь ' + beKpiPrompt.loss_share_pct + '%, маржа ≥ ' + (beKpiPrompt.breakeven_margin_rub == null ? '—' : rub(beKpiPrompt.breakeven_margin_rub)) + ' с заказа, то есть ' + (beKpiPrompt.required_margin_pct_at_current_price == null ? '—' : beKpiPrompt.required_margin_pct_at_current_price + '%') + ' от текущего чека ' + rub(cal.price) + '.');
+    var bmPrompt = benchmarkComparison();
+    if (bmPrompt.length) {
+      L.push('- Бенчмарки рынка (используй только эти числа; в ответе указывай источник и дату):');
+      bmPrompt.forEach(function (b) {
+        L.push('  - ' + b.metric + ': рынок ' + b.market_value + b.unit + ', у нас ' + (b.current_value == null ? '—' : b.current_value + b.unit) +
+          (b.delta == null ? '' : ', разница ' + (b.delta > 0 ? '+' : '') + b.delta + b.unit + ' — ' + b.verdict) + '; источник: ' + b.source + ' (' + b.date + ').');
+      });
+      var bmMissing = BENCHMARK_METRICS.filter(function (m) { return !benchmarksRaw()[m.key]; }).map(function (m) { return m.label; });
+      if (bmMissing.length) L.push('  - Не заполнено (сравнения нет): ' + bmMissing.join(', ') + '.');
+    } else {
+      L.push('- Бенчмарки рынка не подключены: рыночных чисел нет. Не придумывай их — если сравниваешь с рынком, верни benchmark_status = "not_connected".');
+    }
     L.push('');
     L.push('### 4.2. Метрики по неделям');
-    L.push('| Неделя | Опоздания, % | Обращения, % | ТМЦ, % | Выходы, % | Куратор, % | Прибыль, ₽/день |');
-    L.push('|---|---|---|---|---|---|---|');
+    L.push('| Неделя | Опоздания, % | Обращения, % | ТМЦ, % | Выходы, % | Куратор, % | Прибыль, ₽/день | Измерено | Качество |');
+    L.push('|---|---|---|---|---|---|---|---|---|');
     for (var wi = 1; wi <= TOTAL_WEEKS; wi++) {
       var pi = profitForWeek(wi);
       if (!pi) continue;
-      L.push('| ' + wi + ' | ' + pi.lateness + ' | ' + pi.appeals + ' | ' + pi.tmc + ' | ' + pi.exits + ' | ' + pi.curatorMin + ' | ' + pi.profit.toLocaleString('ru-RU') + ' |');
+      var qi = dataQualityOf(wi);
+      L.push('| ' + wi + ' | ' + pi.lateness + ' | ' + pi.appeals + ' | ' + pi.tmc + ' | ' + pi.exits + ' | ' + pi.curatorMin + ' | ' + pi.profit.toLocaleString('ru-RU') + ' | ' + qi.measured_count + '/' + qi.measured_total + ' | ' + qi.score + ' |');
+    }
+    L.push('');
+    L.push('- Качество данных: введено = 1, унаследовано из недели 1 = 0.5, дефолт модели = 0. Недели с качеством < 0.8 (и метрики с «Измерено» = нет) не используй для тренда, MAPE и выводов — сначала дозаполни их.');
+    var readyP = reportReadiness();
+    L.push('- Полнота данных: недель с полным набором обязательных полей — ' + readyP.completeWeeks + ' из ' + TOTAL_WEEKS + '.');
+    if (!readyP.ready) {
+      readyP.incomplete.forEach(function (c) {
+        L.push('  - Неделя ' + c.week + ' неполная (' + c.filled + '/' + c.required + '), нет: ' + c.missingLabels.join(', ') + '. Значения этих метрик унаследованы или дефолтные — не используй их для тренда, MAPE и выводов.');
+      });
     }
     L.push('');
     if (p) {
@@ -1412,10 +2127,11 @@
       L.push('| ' + k + ' | ' + type + ' | ' + range + ' | ' + PLAN_HELP[k] + ' |');
     });
     L.push('');
-    L.push('## 6. Формат ответа (JSON)');
+    L.push('## 6. Формат ответа (JSON, ' + SCHEMA_VERSION + ')');
     var srcLabel = week > 1 ? 'метрики недель 1–' + week : 'метрики недели 1';
     var example = [
       '{',
+      '  "schema_version": "' + SCHEMA_VERSION + '",',
       '  "strategy_name": "короткое имя стратегии",',
       '  "actions": [',
       '    {',
@@ -1423,11 +2139,21 @@
       '      "impact_profit_rub_day": 0,',
       '      "impact_metrics": { "lateness": -1.5, "appeals": -1.0, "tmc": 5, "exits": 2, "courier_cost": 15 },',
       '      "risk": "low",',
-      '      "confidence": 0.7',
+      '      "confidence": 0.7,',
+      '      "evidence": ["на чём основано: метрика недели, бенчмарк, расчёт"]',
       '    }',
       '  ],',
-      '  "expected_profit_rub_day": 0,',
-      '  "expected_delta_vs_baseline_pct": 0,',
+      '  "expected": {',
+      '    "profit_rub_day": 0,',
+      '    "delta_vs_baseline_pct": 0,',
+      '    "orders_per_day": 0,',
+      '    "contribution_rub_per_order": 0,',
+      '    "loss_breakdown_rub_day": { "structural_unit_economics": 0, "lateness": 0, "appeals": 0, "tmc": 0, "exits": 0, "curator_multiplier": 0, "curator_penalty": 0 }',
+      '  },',
+      '  "leading_indicators": [',
+      '    { "week": ' + next + ', "metric": "contribution_rub_per_order", "target": 0 }',
+      '  ],',
+      '  "do_not_do": ["что не делать и почему"],',
       '  "data_sources_used": ["' + srcLabel + '", "открытые тарифы"],',
       '  "assumptions": ["..."],',
       '  "open_questions": ["..."],',
@@ -1446,13 +2172,18 @@
     example.forEach(function (x) { L.push(x); });
     L.push('');
     L.push('Правила:');
-    L.push('- Числа — только числа в JSON; деньги — ₽/день; изменения метрик — в п.п.');
-    L.push('- actions: 1–7 действий; impact_profit_rub_day может быть отрицательным; risk: low | mid | high; confidence: 0…1.');
+    L.push('- Числа — только числа в JSON; деньги — ₽/день; изменения метрик — в п.п. Нет данных — null, не 0.');
+    L.push('- actions: 1–7 действий; impact_profit_rub_day может быть отрицательным; risk: low | mid | high; confidence: 0…1; evidence — 1–3 ссылки на основание.');
     L.push('- impact_metrics: только ключи ' + METRIC_KEYS.join(', ') + '.');
-    L.push('- expected_profit_rub_day — прогноз прибыли в день на неделе ' + next + '.');
-    L.push('- expected_delta_vs_baseline_pct — изменение к baseline в %.');
+    L.push('- expected.profit_rub_day — прогноз прибыли в день на неделе ' + next + '; expected.delta_vs_baseline_pct — изменение к baseline в %.');
+    L.push('- expected.loss_breakdown_rub_day — ожидаемое разложение прибыли той же структуры, что в отчёте (потери со знаком минус, residual должен быть 0).');
+    L.push('- leading_indicators — 1–5 опережающих показателей с неделей и целью (вклад с заказа, удержание ТМЦ/выходов, качество данных).');
+    L.push('- do_not_do — минимум один пункт; при отрицательном вкладе с заказа обязательно «не масштабировать объём».');
     L.push('- data_sources_used — минимум один источник (метрики, открытые тарифы, бенчмарки).');
     L.push('- week_plan — только поля из таблицы раздела 5; для недели 6 поле можно опустить.');
+    L.push('- Обратная совместимость: плоские expected_profit_rub_day / expected_delta_vs_baseline_pct ещё принимаются, но предпочтителен блок expected.');
+    L.push('- Целевые числа бери из расчёта безубыточности (раздел 4.1), не придумывай: expected.contribution_rub_per_order должен быть ≥ 0, а требуемая маржа — не ниже безубыточной. Если безубыточность недостижима, план начинается со снижения потерь (ТМЦ, куратор), а не с роста объёма.');
+    L.push('- Рыночные числа — только из блока бенчмарков (раздел 4.1), с источником и датой; своих рыночных значений не добавляй.');
     return L.join('\n');
   }
 
@@ -1508,7 +2239,16 @@
         }
         if (['low', 'mid', 'high'].indexOf(a.risk) === -1) bad(at + '.risk: low | mid | high');
         if (typeof a.confidence !== 'number' || !isFinite(a.confidence) || a.confidence < 0 || a.confidence > 1) bad(at + '.confidence: число 0…1');
-        actions.push({ action: action, impact_profit_rub_day: imp, impact_metrics: metrics, risk: a.risk, confidence: a.confidence });
+        var evidence = [];
+        if (a.evidence != null) {
+          if (!Array.isArray(a.evidence)) bad(at + '.evidence: ожидается массив строк');
+          else a.evidence.forEach(function (x, xi) {
+            if (typeof x !== 'string' || !x.trim()) { bad(at + '.evidence[' + xi + ']: ожидается непустая строка'); return; }
+            evidence.push(x.trim());
+          });
+        }
+        if (!evidence.length) warnings.push(at + '.evidence: не указано основание действия');
+        actions.push({ action: action, impact_profit_rub_day: imp, impact_metrics: metrics, risk: a.risk, confidence: a.confidence, evidence: evidence });
       }
     }
 
@@ -1542,17 +2282,94 @@
       }
     }
 
+    // strategy/2: блок expected; плоские поля strategy/1 принимаются для совместимости
+    var expIn = (o.expected && typeof o.expected === 'object' && !Array.isArray(o.expected)) ? o.expected : null;
+    if (o.expected != null && !expIn) bad('expected: ожидается объект');
+    if (o.schema_version != null && ['strategy/1', 'strategy/2'].indexOf(o.schema_version) === -1) {
+      warnings.push('schema_version: ' + o.schema_version + ' — ожидается ' + SCHEMA_VERSION + ', ответ разобран как ' + SCHEMA_VERSION);
+    }
+    if (!expIn && o.expected_profit_rub_day == null) bad('expected.profit_rub_day: обязательное число (или плоское expected_profit_rub_day)');
+    var expectedProfit = numField(expIn ? expIn.profit_rub_day : o.expected_profit_rub_day, 'expected.profit_rub_day', -5000000, 5000000);
+    var expectedDelta = numField(expIn ? expIn.delta_vs_baseline_pct : o.expected_delta_vs_baseline_pct, 'expected.delta_vs_baseline_pct', -100, 1000);
+    var expected = { profit_rub_day: expectedProfit, delta_vs_baseline_pct: expectedDelta, orders_per_day: null, contribution_rub_per_order: null, loss_breakdown_rub_day: null };
+    if (expIn) {
+      if (expIn.orders_per_day != null) expected.orders_per_day = numField(expIn.orders_per_day, 'expected.orders_per_day', 0, 100000);
+      if (expIn.contribution_rub_per_order != null) expected.contribution_rub_per_order = numField(expIn.contribution_rub_per_order, 'expected.contribution_rub_per_order', -100000, 100000);
+      if (expIn.loss_breakdown_rub_day != null) {
+        if (typeof expIn.loss_breakdown_rub_day !== 'object' || Array.isArray(expIn.loss_breakdown_rub_day)) bad('expected.loss_breakdown_rub_day: ожидается объект');
+        else {
+          var lb = {};
+          Object.keys(expIn.loss_breakdown_rub_day).forEach(function (k) {
+            var v = expIn.loss_breakdown_rub_day[k];
+            if (typeof v !== 'number' || !isFinite(v)) { bad('expected.loss_breakdown_rub_day.' + k + ': ожидается число'); return; }
+            lb[k] = v;
+          });
+          expected.loss_breakdown_rub_day = lb;
+        }
+      }
+      var covered = ['structural_unit_economics', 'lateness', 'appeals', 'tmc', 'exits'].filter(function (k) {
+        return expected.loss_breakdown_rub_day && typeof expected.loss_breakdown_rub_day[k] === 'number';
+      });
+      if (expected.loss_breakdown_rub_day && covered.length < 5) warnings.push('expected.loss_breakdown_rub_day: разложены не все компоненты (' + covered.length + '/5 ключевых)');
+    }
+
+    var leading = [];
+    if (o.leading_indicators != null) {
+      if (!Array.isArray(o.leading_indicators)) bad('leading_indicators: ожидается массив');
+      else o.leading_indicators.forEach(function (li, ii) {
+        var at = 'leading_indicators[' + ii + ']';
+        if (typeof li === 'string') { if (li.trim()) leading.push({ week: null, metric: li.trim(), target: null }); else bad(at + ': пустая строка'); return; }
+        if (!li || typeof li !== 'object' || Array.isArray(li)) { bad(at + ': ожидается объект или строка'); return; }
+        var metric = str(li.metric, at + '.metric');
+        var liWeek = li.week == null ? null : li.week;
+        if (liWeek != null && (!isFinite(liWeek) || liWeek < 1 || liWeek > TOTAL_WEEKS + 3)) { bad(at + '.week: 1…' + (TOTAL_WEEKS + 3)); liWeek = null; }
+        var target = null;
+        if (li.target != null) {
+          if (typeof li.target !== 'number' || !isFinite(li.target)) bad(at + '.target: ожидается число');
+          else target = li.target;
+        }
+        leading.push({ week: liWeek == null ? null : Number(liWeek), metric: metric, target: target });
+      });
+      if (!leading.length) warnings.push('leading_indicators: пусто — план опирается только на прибыль (lagging)');
+    } else {
+      warnings.push('leading_indicators: не указаны опережающие показатели');
+    }
+
+    var doNotDo = arr(o.do_not_do == null ? [] : o.do_not_do, 'do_not_do', false);
+    var contribNow = profitForWeek(TOTAL_WEEKS) ? profitForWeek(TOTAL_WEEKS).contribution : null;
+    var contribPlan = expected.contribution_rub_per_order != null ? expected.contribution_rub_per_order : contribNow;
+    if (!doNotDo.length) warnings.push('do_not_do: не указано, что не делать' + (contribPlan != null && contribPlan <= 0 ? ' (при вкладе с заказа ≤ 0 обязательно «не масштабировать объём»)' : ''));
+    else if (contribPlan != null && contribPlan <= 0 && !/объ[её]м|масштаб/i.test(doNotDo.join(' '))) {
+      warnings.push('do_not_do: при вкладе с заказа ≤ 0 нет запрета на рост объёма');
+    }
+
     var value = {
+      schema_version: SCHEMA_VERSION,
       strategy_name: str(o.strategy_name, 'strategy_name'),
       actions: actions,
-      expected_profit_rub_day: numField(o.expected_profit_rub_day, 'expected_profit_rub_day', -5000000, 5000000),
-      expected_delta_vs_baseline_pct: numField(o.expected_delta_vs_baseline_pct, 'expected_delta_vs_baseline_pct', -100, 1000),
+      expected: expected,
+      leading_indicators: leading,
+      do_not_do: doNotDo,
+      // плоские алиасы — для совместимости со strategy/1 и старыми прогонами
+      expected_profit_rub_day: expectedProfit,
+      expected_delta_vs_baseline_pct: expectedDelta,
       data_sources_used: arr(o.data_sources_used, 'data_sources_used', true),
       assumptions: arr(o.assumptions == null ? [] : o.assumptions, 'assumptions', false),
       open_questions: arr(o.open_questions == null ? [] : o.open_questions, 'open_questions', false),
       week_plan: plan
     };
     return { ok: errors.length === 0, errors: errors, warnings: warnings, value: value };
+  }
+
+  // Единый доступ к прогнозу: strategy/2 (вложенный expected) и strategy/1 (плоские поля)
+  function expectedOf(s) {
+    if (!s) return { profit_rub_day: null, delta_vs_baseline_pct: null, orders_per_day: null, contribution_rub_per_order: null, loss_breakdown_rub_day: null };
+    if (s.expected && typeof s.expected === 'object') return s.expected;
+    return {
+      profit_rub_day: typeof s.expected_profit_rub_day === 'number' ? s.expected_profit_rub_day : null,
+      delta_vs_baseline_pct: typeof s.expected_delta_vs_baseline_pct === 'number' ? s.expected_delta_vs_baseline_pct : null,
+      orders_per_day: null, contribution_rub_per_order: null, loss_breakdown_rub_day: null
+    };
   }
 
   function riskScore(s) {
@@ -1568,6 +2385,189 @@
     if (/снизить[^.]{0,30}став/.test(text) && /(мотивац|преми|бонус)/.test(text)) flags.push('снижение ставки + рост мотивации без бюджета');
     if (!s.data_sources_used || !s.data_sources_used.length) flags.push('нет ссылок на источники');
     return flags;
+  }
+
+  // ---------- схема оценки ИИ: evaluation/2 ----------
+  var EVAL_MAPE_STATUS = ['ok', 'not_applicable_no_ai_runs', 'insufficient_fact', 'incomplete_data'];
+  var EVAL_TOP_KEYS = ['schema_version', 'verdict', 'mape_pct', 'mape_status', 'error_rub_day', 'error_vs_baseline_pp',
+    'risk_score', 'risk_scale', 'confidence_in_verdict', 'confidence_reason', 'loss_breakdown_rub_day',
+    'gaps_ranked', 'top_effect_action', 'next_3_weeks', 'do_not_do', 'data_quality', 'benchmarks', 'benchmark_status', 'open_questions'];
+
+  function validateEvaluation(o, ctx) {
+    ctx = ctx || {};
+    var errors = [], warnings = [];
+    if (!o || typeof o !== 'object' || Array.isArray(o)) {
+      return { ok: false, errors: ['Ответ не является JSON-объектом.'], warnings: [], value: null };
+    }
+    function bad(m) { errors.push(m); }
+    function strField(v, name, required) {
+      if (v == null) { if (required) bad(name + ': обязательная строка'); return ''; }
+      if (typeof v !== 'string') { bad(name + ': ожидается строка'); return ''; }
+      if (!v.trim()) { if (required) bad(name + ': пустая строка'); return ''; }
+      return v.trim();
+    }
+    function numRange(v, name, min, max, required) {
+      if (v == null) { if (required) bad(name + ': обязательное число'); return null; }
+      var n = v;
+      if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) { warnings.push(name + ': число строкой — приведено'); n = Number(v); }
+      if (typeof n !== 'number' || !isFinite(n)) { bad(name + ': ожидается число'); return null; }
+      if (n < min || n > max) { bad(name + ': ' + n + ' вне диапазона ' + min + '…' + max); return null; }
+      return n;
+    }
+    function strList(v, name) {
+      if (v == null) return [];
+      if (!Array.isArray(v)) { bad(name + ': ожидается массив строк'); return []; }
+      var out = [];
+      v.forEach(function (x, i) {
+        if (typeof x !== 'string' || !x.trim()) { bad(name + '[' + i + ']: ожидается непустая строка'); return; }
+        out.push(x.trim());
+      });
+      return out;
+    }
+
+    if (o.schema_version != null && o.schema_version !== EVAL_SCHEMA_VERSION) {
+      warnings.push('schema_version: ' + o.schema_version + ' — ожидается ' + EVAL_SCHEMA_VERSION);
+    }
+    Object.keys(o).forEach(function (k) {
+      if (EVAL_TOP_KEYS.indexOf(k) === -1) warnings.push(k + ': неизвестное поле — сохранено как есть');
+    });
+
+    var verdict = strField(o.verdict, 'verdict', true);
+
+    // MAPE и ошибка прогноза: без данных — null, а не 0
+    var mape = null;
+    if (o.mape_pct != null) {
+      if (typeof o.mape_pct === 'number' && isFinite(o.mape_pct) && o.mape_pct >= 0) mape = o.mape_pct;
+      else bad('mape_pct: число ≥ 0 или null');
+    }
+    var mapeStatus = null;
+    if (o.mape_status != null) {
+      if (EVAL_MAPE_STATUS.indexOf(o.mape_status) === -1) bad('mape_status: ' + EVAL_MAPE_STATUS.join(' | '));
+      else mapeStatus = o.mape_status;
+    }
+    if (mape === null && !mapeStatus) bad('mape_status: обязателен, если mape_pct = null');
+    if (mape !== null && !mapeStatus) mapeStatus = 'ok';
+    if (mape === 0 && mapeStatus !== 'ok') bad('mape_pct: 0 означает идеальный прогноз — при отсутствии данных ставьте null');
+    if (mape === 0 && !ctx.runsWithFact) bad('mape_pct: 0 при отсутствии прогонов с фактом — ошибку прогноза посчитать нельзя');
+    if (mape !== null && mapeStatus === 'not_applicable_no_ai_runs') warnings.push('mape_pct указан, но статус «прогонов нет»');
+    var errorRub = null;
+    if (o.error_rub_day != null) {
+      if (typeof o.error_rub_day === 'number' && isFinite(o.error_rub_day)) errorRub = o.error_rub_day;
+      else bad('error_rub_day: число или null');
+    }
+    var errorPp = null;
+    if (o.error_vs_baseline_pp != null) {
+      if (typeof o.error_vs_baseline_pp === 'number' && isFinite(o.error_vs_baseline_pp)) errorPp = o.error_vs_baseline_pp;
+      else bad('error_vs_baseline_pp: число или null');
+    }
+
+    // Риск и уверенность — только числами со шкалой
+    var risk = numRange(o.risk_score, 'risk_score', 0, 1, true);
+    var riskScale = strField(o.risk_scale, 'risk_scale', true);
+    var conf = numRange(o.confidence_in_verdict, 'confidence_in_verdict', 0, 1, true);
+    var confReason = strField(o.confidence_reason, 'confidence_reason', false);
+    if (!confReason) warnings.push('confidence_reason: не объяснена уверенность в вердикте');
+    if (typeof o.risk_score === 'string') warnings.push('risk_score: нужна шкала в risk_scale, например "0-1 (0 — низкий, 1 — критический)"');
+
+    // Расхождения — с рангом, влиянием в ₽/день и доказательством
+    var gaps = [];
+    if (!Array.isArray(o.gaps_ranked)) bad('gaps_ranked: ожидается массив');
+    else {
+      if (!o.gaps_ranked.length) bad('gaps_ranked: нужно хотя бы одно расхождение');
+      o.gaps_ranked.forEach(function (g, i) {
+        var at = 'gaps_ranked[' + i + ']';
+        if (!g || typeof g !== 'object' || Array.isArray(g)) { bad(at + ': ожидается объект'); return; }
+        var rank = typeof g.rank === 'number' && isFinite(g.rank) ? g.rank : null;
+        if (rank === null) bad(at + '.rank: ожидается число');
+        var impact = null;
+        if (g.impact_rub_day != null) {
+          if (typeof g.impact_rub_day === 'number' && isFinite(g.impact_rub_day)) impact = g.impact_rub_day;
+          else bad(at + '.impact_rub_day: число или null');
+        }
+        var evidence = strField(g.evidence, at + '.evidence', false);
+        if (!evidence) warnings.push(at + '.evidence: не указано доказательство расхождения');
+        if (['low', 'mid', 'high'].indexOf(g.fixability) === -1) bad(at + '.fixability: low | mid | high');
+        gaps.push({ rank: rank, gap: strField(g.gap, at + '.gap', true), impact_rub_day: impact, evidence: evidence, fixability: g.fixability });
+      });
+      var ranks = gaps.map(function (g) { return g.rank; });
+      var sortedRanks = ranks.slice().sort(function (a, b) { return a - b; });
+      if (JSON.stringify(ranks) !== JSON.stringify(sortedRanks)) warnings.push('gaps_ranked: порядок не совпадает с rank — отсортируйте по влиянию');
+    }
+
+    var topAction = strField(o.top_effect_action, 'top_effect_action', true);
+
+    var next3 = [];
+    if (!Array.isArray(o.next_3_weeks)) bad('next_3_weeks: ожидается массив');
+    else o.next_3_weeks.forEach(function (x, i) {
+      var at = 'next_3_weeks[' + i + ']';
+      if (typeof x === 'string') {
+        if (!x.trim()) { bad(at + ': пустая строка'); return; }
+        next3.push({ week: null, leading: null, lagging: null, text: x.trim() });
+        return;
+      }
+      if (!x || typeof x !== 'object' || Array.isArray(x)) { bad(at + ': ожидается объект или строка'); return; }
+      var nw = x.week == null ? null : x.week;
+      if (nw != null && (!isFinite(nw) || nw < 1 || nw > TOTAL_WEEKS + 3)) { bad(at + '.week: 1…' + (TOTAL_WEEKS + 3)); nw = null; }
+      if (!x.leading) warnings.push(at + ': нет leading-показателей — план опирается только на прибыль');
+      next3.push({ week: nw == null ? null : Number(nw), leading: x.leading || null, lagging: x.lagging || null });
+    });
+    if (next3.length && next3.length < 3) warnings.push('next_3_weeks: ожидается 3 недели, получено ' + next3.length);
+
+    var doNotDo = strList(o.do_not_do, 'do_not_do');
+    if (!doNotDo.length) warnings.push('do_not_do: не указано, что делать не нужно');
+    var lostNow = profitForWeek(TOTAL_WEEKS);
+    if (lostNow && lostNow.contribution <= 0 && doNotDo.length && !/объ[её]м|масштаб/i.test(doNotDo.join(' '))) {
+      warnings.push('do_not_do: при вкладе с заказа ≤ 0 нет запрета на рост объёма');
+    }
+
+    var dataQuality = null;
+    if (o.data_quality != null) {
+      if (typeof o.data_quality !== 'object' || Array.isArray(o.data_quality)) bad('data_quality: ожидается объект');
+      else {
+        var qs = numRange(o.data_quality.score, 'data_quality.score', 0, 1, false);
+        dataQuality = { score: qs, issues: strList(o.data_quality.issues, 'data_quality.issues') };
+      }
+    }
+
+    var benchmarks = [];
+    if (o.benchmarks != null) {
+      if (!Array.isArray(o.benchmarks)) bad('benchmarks: ожидается массив');
+      else o.benchmarks.forEach(function (b, i) {
+        var at = 'benchmarks[' + i + ']';
+        if (!b || typeof b !== 'object' || Array.isArray(b)) { bad(at + ': ожидается объект'); return; }
+        if (!strField(b.source, at + '.source', false)) warnings.push(at + '.source: нет источника — бенчмарк нельзя проверить');
+        benchmarks.push({ metric: strField(b.metric, at + '.metric', true), value: b.value == null ? null : b.value, source: strField(b.source, at + '.source', false), date: b.date == null ? '' : String(b.date) });
+      });
+    }
+    var benchStatus = o.benchmark_status == null ? (benchmarks.length ? 'connected' : null) : String(o.benchmark_status);
+    if (!benchmarks.length && !benchStatus) {
+      benchmarks = [];
+      benchStatus = 'not_connected';
+      warnings.push('benchmark_status: бенчмарки не подключены — так и напишите, не выдумывайте числа');
+    }
+
+    var value = {
+      schema_version: EVAL_SCHEMA_VERSION,
+      verdict: verdict,
+      mape_pct: mape,
+      mape_status: mapeStatus,
+      error_rub_day: errorRub,
+      error_vs_baseline_pp: errorPp,
+      risk_score: risk,
+      risk_scale: riskScale,
+      confidence_in_verdict: conf,
+      confidence_reason: confReason,
+      loss_breakdown_rub_day: (o.loss_breakdown_rub_day && typeof o.loss_breakdown_rub_day === 'object' && !Array.isArray(o.loss_breakdown_rub_day)) ? o.loss_breakdown_rub_day : null,
+      gaps_ranked: gaps,
+      top_effect_action: topAction,
+      next_3_weeks: next3,
+      do_not_do: doNotDo,
+      data_quality: dataQuality,
+      benchmarks: benchmarks,
+      benchmark_status: benchStatus,
+      open_questions: strList(o.open_questions, 'open_questions')
+    };
+    return { ok: errors.length === 0, errors: errors, warnings: warnings, value: value };
   }
 
   function fieldIdForPlan(key, week) {
@@ -1644,12 +2644,18 @@
   function exportState() {
     var payload = {
       app: 'darkstore_profit_live',
+      state_version: STATE_VERSION,
       model_version: MODEL_VERSION,
       schema_version: SCHEMA_VERSION,
       exported_at: new Date().toISOString(),
       current_week: currentWeek,
       weeks: state.weeks,
       ai_runs: runs(),
+      evaluations: evaluations(),
+      needs_review: state.needsReview || {},
+      benchmarks: state.benchmarks || {},
+      benchmark_asked: !!state.benchmarkAsked,
+      migrated_from: state.migratedFrom || null,
       final_report: state.finalReport || ''
     };
     try {
@@ -1672,18 +2678,61 @@
       try {
         var d = JSON.parse(String(fr.result));
         if (!d || typeof d !== 'object' || !d.weeks || typeof d.weeks !== 'object') throw new Error('нет блока weeks');
-        state.weeks = d.weeks;
-        state.aiRuns = d.ai_runs || {};
-        state.finalReport = d.final_report || '';
-        currentWeek = Math.max(1, Math.min(TOTAL_WEEKS, parseInt(d.current_week, 10) || 1));
+        var res = migrateState(d, 'import');
+        applyState(res.state);
         aiPanelWeek = 0;
         save();
         render(true);
-        setStatus('Проект загружен: недель ' + Object.keys(state.weeks).length + ', прогонов ' + Object.keys(state.aiRuns).length + '.', false);
+        renderBenchmarkCard();
+        setStatus('Проект загружен: недель ' + Object.keys(state.weeks).length + ', прогонов ' + Object.keys(state.aiRuns).length +
+          (res.from < STATE_VERSION ? ', схема состояния обновлена до ' + STATE_VERSION + ' — проверьте недели: ' + (res.changed.join(', ') || '—') : '') + '.', false);
       } catch (e) { setStatus('Импорт не удался: ' + e.message, true); }
     };
     fr.onerror = function () { setStatus('Файл не прочитан.', true); };
     fr.readAsText(file);
+  }
+
+  function breakdownOf(p) {
+    return {
+      structural_unit_economics: Math.round(p.structural),
+      lateness: -Math.round(p.lossLate),
+      appeals: -Math.round(p.lossApp),
+      tmc: -Math.round(p.lossTmc),
+      exits: -Math.round(p.lossExits),
+      curator_multiplier: -Math.round(p.lossCurator),
+      curator_penalty: -Math.round(p.curatorPenaltyAmount),
+      residual: Math.round(p.residual)
+    };
+  }
+
+  // Гейты недели: у каждой строки есть источник метрики. Если метрика на этой неделе не измерялась,
+  // гейт получает ok = null и [Н/Д] — он не участвует в итоге.
+  function gatesFor(w, cal) {
+    var p = profitForWeek(w);
+    if (!p) return null;
+    cal = cal || calibration();
+    var q = dataQualityOf(w);
+    function gate(name, value, ok, metric) {
+      var src = metric === 'calc' ? 'расчёт' : qualitySource(w, metric);
+      var measured = metric === 'calc' ? true : q.measured[metric];
+      return {
+        name: name, value: value, ok: measured ? !!ok : null, measured: measured,
+        source: src, note: measured ? '' : 'на этой неделе не измерялось (' + src + ')'
+      };
+    }
+    return [
+      gate('опоздания ≤ 7%', p.lateness + '%', p.lateness <= 7, 'lateness'),
+      gate('обращения ≤ 5%', p.appeals + '%', p.appeals <= 5, 'appeals'),
+      gate('ТМЦ = 100%', p.tmc + '%', p.tmc >= 100, 'tmc'),
+      gate('куратор ≥ ' + cal.curatorThreshold + '%', p.curatorMin + '%', p.curatorMin >= cal.curatorThreshold, 'curator'),
+      gate('выходы ≥ 95%', p.exits + '%', p.exits >= 95, 'exits'),
+      gate('вклад с заказа ≥ 0 ₽', rub(p.contribution), p.contribution >= 0, 'calc')
+    ];
+  }
+
+  function gatesPassed(gates) {
+    var measured = (gates || []).filter(function (g) { return g.measured; });
+    return measured.length ? measured.every(function (g) { return g.ok; }) : false;
   }
 
   function buildFinalReport() {
@@ -1707,74 +2756,218 @@
       var grow = ((lastP.profit - p1.profit) / Math.max(1, Math.abs(p1.profit))) * 100;
       L.push('Изменение прибыли к baseline: ' + (grow >= 0 ? '+' : '') + grow.toFixed(1) + '%');
     }
-    L.push('Заполнено недель: ' + filled.length + ' из ' + TOTAL_WEEKS + '.');
+    L.push('Недель с данными: ' + filled.length + ' из ' + TOTAL_WEEKS + '.');
+    var ready = reportReadiness();
+    L.push('Полнота данных: полных недель ' + ready.completeWeeks + ' из ' + TOTAL_WEEKS +
+      (ready.ready ? ' — обязательные поля заполнены, анализ можно считать точным.' : ' — АНАЛИЗ НЕТОЧЕН: не хватает ' + ready.missingTotal + ' обязательных полей.'));
+    var projQ = projectDataQuality();
+    L.push('Качество данных: ' + projQ.score + ' из 1 (среднее по ' + projQ.weeks + ' неделям; введено = 1, унаследовано из недели 1 = 0.5, дефолт модели = 0).' +
+      (projQ.issues.length ? ' Не измерено: ' + projQ.issues.join(' | ') + '.' : ' Все ключевые метрики измерены на своих неделях.'));
+    var reviewW = weeksNeedingReview();
+    if (state.migratedFrom || reviewW.length) {
+      L.push('Происхождение данных: проект перенесён из версии ' + (state.migratedFrom || 'более старой') +
+        ' (сохранённая модель: ' + (state.modelVersionSaved || '—') + ', схема состояния ' + (state.stateVersion || STATE_VERSION) + ').' +
+        (reviewW.length ? ' Недели к проверке: ' + reviewW.join(', ') + ' — числа пересчитаны по новой формуле, подтвердите значения.' : ' Все недели после переноса проверены.'));
+    }
     var calF = calibration();
     L.push('Экономика заказа: чек ' + rub(calF.price) + ' × маржа ' + calF.marginPct + '% = ' + rub(calF.price * calF.marginPct / 100) + '; ставка курьеру ' + rub(calF.courierCost) + '; вклад ' + rub(calF.price * calF.marginPct / 100 - calF.courierCost) + ' с заказа.');
+    L.push('Куратор: индекс готовности = 0.20×процессы + 0.25×автономность + 0.20×KPI + 0.20×обучение + 0.15×вовлечённость; дефицит до порога ' + calF.curatorThreshold + '% умножает потери на kC = ' + calF.kC + '% за пункт. Обучение и вовлечённость куратора влияют на маржу через потери.');
     if (lastP) L.push('Вклад с заказа на последней неделе: ' + rub(lastP.contribution) + (lastP.contribution <= 0 ? ' — экономика не сходится' : '') + '.');
+    var beLast = lastP ? breakevenOf(lastP, calF) : null;
+    if (beLast) {
+      L.push(beLast.impossible
+        ? 'Безубыточность при текущих потерях недостижима: потери ' + beLast.lossSharePct + '% выручки, при доле ≥ 100% никакая маржа не помогает — сначала снижайте потери.'
+        : 'Безубыточность (последняя неделя): доля потерь ' + beLast.lossSharePct + '% выручки → нужна маржа ≥ ' + rub(beLast.marginRub) + ' с заказа' +
+          (beLast.priceRub != null ? ' (чек ≥ ' + rub(beLast.priceRub) + ' при марже ' + calF.marginPct + '%)' : '') +
+          '; сейчас ' + rub(beLast.currentMarginRub) + ' → ' + (beLast.gapRub < 0 ? 'дефицит ' + rub(Math.abs(beLast.gapRub)) : 'запас ' + rub(beLast.gapRub)) + ' с заказа. ' +
+          'Целевая маржа с буфером ' + rub(beLast.bufferRub) + ': ' + rub(beLast.targetMarginRub) + ' с заказа' + (beLast.targetPriceRub != null ? ' (чек ' + rub(beLast.targetPriceRub) + ')' : '') + '.');
+      var beKpi = breakevenAtTargetKpi(calF);
+      if (beKpi.breakeven_margin_rub != null) {
+        L.push('Даже при целевых KPI (' + TARGET_KPI.lateness + '% опозданий, ' + TARGET_KPI.appeals + '% обращений, ТМЦ ' + TARGET_KPI.tmc + '%, выходы ' + TARGET_KPI.exits + '%) безубыточная маржа = ' + rub(beKpi.breakeven_margin_rub) + ' с заказа → нужна маржа ' + beKpi.required_margin_pct_at_current_price + '% от текущего чека ' + rub(calF.price) + ' (сейчас ' + calF.marginPct + '%).');
+      }
+    }
     L.push('');
+    L.push('## 0. Полнота данных по неделям');
+    L.push('| Неделя | Заполнено | Обязательных | % | Качество данных | Измерено метрик | Чего не хватает |');
+    L.push('|---|---|---|---|---|---|---|');
+    for (var wc = 1; wc <= TOTAL_WEEKS; wc++) {
+      var cv = weekCoverage(wc);
+      var qc = dataQualityOf(wc);
+      L.push('| ' + wc + ' | ' + cv.filled + ' | ' + cv.required + ' | ' + cv.pct + ' | ' + qc.score + ' | ' + qc.measured_count + '/' + qc.measured_total + ' | ' + (cv.complete ? '—' : cv.missingLabels.join('; ')) + ' |');
+    }
+    L.push('');
+    if (projQ.issues.length) {
+      L.push('Что не измерено по неделям:');
+      projQ.issues.forEach(function (x) { L.push('- ' + x + '.'); });
+      L.push('');
+    }
     L.push('## 1. Метрики и прибыль по неделям');
-    L.push('| Неделя | Опоздания, % | Обращения, % | ТМЦ, % | Выходы, % | Куратор, % | Прибыль, ₽/день |');
+    L.push('| Неделя | Опоздания, % | Обращения, % | ТМЦ, % | Выходы, % | Куратор, % | Прибыль, ₽/день | Данные |');
+    L.push('|---|---|---|---|---|---|---|---|');
+    filled.forEach(function (w) {
+      var p = profitForWeek(w);
+      var cw = weekCoverage(w);
+      L.push('| ' + w + ' | ' + p.lateness + ' | ' + p.appeals + ' | ' + p.tmc + ' | ' + p.exits + ' | ' + p.curatorMin + ' | ' + p.profit.toLocaleString('ru-RU') + ' | ' + (cw.complete ? 'полные' : 'нет: ' + cw.missing.length + ' пол.') + ' |');
+    });
+    L.push('');
+    L.push('### 1.1. Юнит-экономика по неделям');
+    L.push('| Неделя | Заказов/день | Ставка, ₽ | Маржа/заказ, ₽ | Вклад/заказ, ₽ | Структурный вклад, ₽/день | Прибыль, ₽/день |');
     L.push('|---|---|---|---|---|---|---|');
     filled.forEach(function (w) {
       var p = profitForWeek(w);
-      L.push('| ' + w + ' | ' + p.lateness + ' | ' + p.appeals + ' | ' + p.tmc + ' | ' + p.exits + ' | ' + p.curatorMin + ' | ' + p.profit.toLocaleString('ru-RU') + ' |');
+      L.push('| ' + w + ' | ' + p.Q + ' | ' + rub(p.rate) + ' | ' + rub(p.M) + ' | ' + rub(p.contribution) + ' | ' + rub(p.structural) + ' | ' + p.profit.toLocaleString('ru-RU') + ' |');
     });
     L.push('');
+    L.push('### 1.2. Разложение прибыли по неделям, ₽/день');
+    L.push('| Неделя | Структурный вклад | Опоздания | Обращения | ТМЦ | Выходы | Куратор (множитель) | Штраф куратора | Итого прибыль | Остаток |');
+    L.push('|---|---|---|---|---|---|---|---|---|---|');
+    filled.forEach(function (w) {
+      var p = profitForWeek(w);
+      L.push('| ' + w + ' | ' + rub(p.structural) + ' | ' + rub(-p.lossLate) + ' | ' + rub(-p.lossApp) + ' | ' + rub(-p.lossTmc) + ' | ' + rub(-p.lossExits) + ' | ' + rub(-p.lossCurator) + ' | ' + rub(-p.curatorPenaltyAmount) + ' | ' + p.profit.toLocaleString('ru-RU') + ' | ' + rub(p.residual) + ' |');
+    });
+    L.push('');
+    L.push('Веса потерь: kL=' + calF.kL + '%, kA=' + calF.kA + '%, kT=' + calF.kT + '%, kE=' + calF.kE + '%, kC=' + calF.kC + '%; порог куратора ' + calF.curatorThreshold + '%, штраф ' + calF.curatorPenaltyPct + '%.');
+    L.push('Остаток должен быть 0: ненулевой остаток означает, что отчёт не сходится с моделью (другая версия или ручная правка чисел).');
+    L.push('');
+    L.push('### 1.3. Безубыточность по неделям');
+    L.push('| Неделя | Доля потерь, % выручки | Безубыточная маржа, ₽/заказ | Текущая маржа, ₽/заказ | Дефицит(−)/запас(+), ₽ | Безубыточный чек, ₽ | Текущий чек, ₽ | Целевая маржа (+' + rub(calF.targetProfitPerOrder) + '), ₽ |');
+    L.push('|---|---|---|---|---|---|---|---|');
+    filled.forEach(function (w) {
+      var p = profitForWeek(w);
+      var be = breakevenOf(p, calF);
+      L.push('| ' + w + ' | ' + be.lossSharePct + ' | ' + (be.impossible ? 'недостижима' : rub(be.marginRub)) + ' | ' + rub(be.currentMarginRub) + ' | ' +
+        (be.impossible ? '—' : (be.gapRub < 0 ? '−' + rub(Math.abs(be.gapRub)) : '+' + rub(be.gapRub))) + ' | ' +
+        (be.impossible || be.priceRub == null ? '—' : rub(be.priceRub)) + ' | ' + rub(be.currentPriceRub) + ' | ' +
+        (be.impossible ? '—' : rub(be.targetMarginRub)) + ' |');
+    });
+    L.push('');
+    var beKpiTable = breakevenAtTargetKpi(calF);
+    L.push('При целевых KPI (' + TARGET_KPI.lateness + '% / ' + TARGET_KPI.appeals + '% / ТМЦ ' + TARGET_KPI.tmc + '% / выходы ' + TARGET_KPI.exits + '%): доля потерь ' + beKpiTable.loss_share_pct + '%, безубыточная маржа ' + (beKpiTable.breakeven_margin_rub == null ? '—' : rub(beKpiTable.breakeven_margin_rub)) + ' с заказа, требуемая маржа ' + (beKpiTable.required_margin_pct_at_current_price == null ? '—' : beKpiTable.required_margin_pct_at_current_price + '%') + ' от текущего чека.');
+    L.push('');
+    L.push('### 1.4. Сравнение с рынком');
+    var bmCmp = benchmarkComparison();
+    if (!bmCmp.length) {
+      L.push('Бенчмарки не подключены (' + benchmarkStatusOf() + '): рыночных чисел в отчёте нет, подставлять их нельзя — берите только расчёты модели.');
+    } else {
+      L.push('| Метрика | Рынок | У нас | Разница | Оценка | Источник | Дата |');
+      L.push('|---|---|---|---|---|---|---|');
+      bmCmp.forEach(function (b) {
+        L.push('| ' + b.metric + ' | ' + b.market_value + b.unit + ' | ' + (b.current_value == null ? '—' : b.current_value + b.unit) + ' | ' +
+          (b.delta == null ? '—' : (b.delta > 0 ? '+' : '') + b.delta + b.unit) + ' | ' + b.verdict + ' | ' + b.source + ' | ' + b.date + ' |');
+      });
+      if (bmCmp.length < BENCHMARK_METRICS.length) {
+        var missingBm = BENCHMARK_METRICS.filter(function (m) { return !benchmarksRaw()[m.key]; }).map(function (m) { return m.label; });
+        L.push('Не заполнено: ' + missingBm.join(', ') + ' — сравнение неполное (' + benchmarkStatusOf() + ').');
+      }
+    }
+    L.push('');
     L.push('## 2. Прогоны ИИ');
-    var mapes = [], riskAvgs = [], sourcesOk = 0, conflicts = 0;
+    var mapes = [], mapErrorsRub = [], riskAvgs = [], sourcesOk = 0, conflicts = 0;
     if (!runKeys.length) L.push('Прогонов нет: цикл «промпт → JSON → следующая неделя» ещё не запускался.');
     runKeys.forEach(function (fw) {
       var r = runs()[String(fw)];
       if (!r || !r.strategy) return;
       var s = r.strategy;
       var fact = r.toWeek ? profitForWeek(r.toWeek) : null;
-      var exp = s.expected_profit_rub_day;
-      var err = (fact && typeof exp === 'number' && fact.profit) ? (Math.abs(exp - fact.profit) / Math.max(1, Math.abs(fact.profit))) * 100 : null;
+      var expObj = expectedOf(s);
+      var exp = expObj.profit_rub_day;
+      var errRub = (fact && typeof exp === 'number') ? Math.round(exp - fact.profit) : null;
+      if (errRub != null) mapErrorsRub.push(Math.abs(errRub));
+      var err = (fact && typeof exp === 'number' && fact.profit) ? (Math.abs(exp - fact.profit) / Math.abs(fact.profit)) * 100 : null;
       if (err != null) mapes.push(err);
+      var expB = expObj.loss_breakdown_rub_day || null;
+      var actB = fact ? breakdownOf(fact) : null;
+      var bErr = null;
+      if (expB && actB) {
+        bErr = 0;
+        Object.keys(actB).forEach(function (k) { if (typeof expB[k] === 'number') bErr += Math.abs(expB[k] - actB[k]); });
+      }
       var rk = riskScore(s);
       riskAvgs.push(rk.avg);
       if (s.data_sources_used && s.data_sources_used.length) sourcesOk++;
       var flags = consistencyFlags(s);
       if (flags.length) conflicts++;
       L.push('');
-      L.push('### Прогон после недели ' + fw + (r.toWeek ? ' → план на неделю ' + r.toWeek : ' (финальный)'));
+      L.push('### Прогон после недели ' + fw + (r.toWeek ? ' → план на неделю ' + r.toWeek : ' (финальный)') + ' · схема ' + (s.schema_version || 'strategy/1'));
       L.push('- Стратегия: ' + s.strategy_name);
-      L.push('- Ожидание: ' + (typeof exp === 'number' ? rub(exp) + '/день' : '—') + ', к baseline ' + s.expected_delta_vs_baseline_pct + '%.');
-      if (fact) L.push('- Факт недели ' + r.toWeek + ': ' + rub(fact.profit) + '/день' + (err != null ? '; ошибка прогноза ' + err.toFixed(1) + '%' : '') + '.');
-      L.push('- Действий: ' + s.actions.length + '; риск-скор ' + rk.avg.toFixed(2) + '/3; источники: ' + (s.data_sources_used && s.data_sources_used.length ? s.data_sources_used.join(', ') : 'не указаны') + '.');
-      L.push('- Применено к форме: ' + (r.applied.length ? r.applied.join(', ') : '—') + '; не применено: ' + (r.skipped.length ? r.skipped.join(', ') : '—') + '.');
+      L.push('- Ожидание: ' + (typeof exp === 'number' ? rub(exp) + '/день' : '—') + ', к baseline ' + (expObj.delta_vs_baseline_pct == null ? '—' : expObj.delta_vs_baseline_pct) + '%.');
+      if (fact) L.push('- Факт недели ' + r.toWeek + ': ' + rub(fact.profit) + '/день' +
+        (errRub != null ? '; ошибка прогноза ' + rub(errRub) + '/день (' + (errRub >= 0 ? 'ожидание выше факта' : 'ожидание ниже факта') + ')' : '') +
+        (err != null ? ', ' + err.toFixed(1) + '% относительно |факта|' : '') + '.');
+      if (bErr != null) L.push('- Разложение ожидание/факт: сумма расхождений по компонентам ' + rub(bErr) + '/день.');
+      L.push('- Действий: ' + ((s.actions || []).length) + '; риск-скор ' + rk.avg.toFixed(2) + '/3; источники: ' + (s.data_sources_used && s.data_sources_used.length ? s.data_sources_used.join(', ') : 'не указаны') +
+        '; leading-показателей: ' + ((s.leading_indicators || []).length) + '; «не делать»: ' + ((s.do_not_do || []).length) + '.');
+      L.push('- Применено к форме: ' + ((r.applied && r.applied.length) ? r.applied.join(', ') : '—') + '; не применено: ' + ((r.skipped && r.skipped.length) ? r.skipped.join(', ') : '—') + '.');
       if (flags.length) L.push('- Замечания: ' + flags.join('; ') + '.');
     });
     L.push('');
     L.push('## 3. Оценка ответов ИИ');
-    L.push('- Прогонов: ' + runKeys.length + '.');
-    L.push('- MAPE по прибыли: ' + (mapes.length ? mean(mapes).toFixed(1) + '% (по ' + mapes.length + ' прогонам с фактом)' : 'нет данных — нужен прогон, после которого заполнена следующая неделя') + '.');
+    L.push('- Прогонов плана: ' + runKeys.length + '; с фактом следующей недели: ' + mapes.length + '.');
+    L.push('- Ошибка прогноза прибыли: ' + (mapErrorsRub.length ? rub(mean(mapErrorsRub)) + '/день в среднем по ' + mapErrorsRub.length + ' прогонам' : 'нет данных — нужен прогон, после которого заполнена следующая неделя') + '.');
+    L.push('- MAPE по прибыли: ' + (mapes.length ? mean(mapes).toFixed(1) + '% (относительно |факта|; при отрицательной прибыли проценты между неделями не сопоставимы — ориентир ₽/день)' : 'нет данных (mape_status = ' + (runKeys.length ? 'insufficient_fact' : 'not_applicable_no_ai_runs') + ')') + '.');
     L.push('- Средний риск-скор: ' + (riskAvgs.length ? mean(riskAvgs).toFixed(2) + ' из 3' : '—') + '.');
     L.push('- Прогонов с источниками: ' + sourcesOk + ' из ' + runKeys.length + '.');
     L.push('- Прогонов с противоречиями/без источников: ' + conflicts + ' из ' + runKeys.length + '.');
+    L.push('- Оценок от ИИ (' + EVAL_SCHEMA_VERSION + '): ' + evaluations().length + '.' +
+      (evaluations().length ? ' Последняя: риск ' + evaluations()[evaluations().length - 1].value.risk_score + '/1, уверенность ' + evaluations()[evaluations().length - 1].value.confidence_in_verdict + ', MAPE ' + (evaluations()[evaluations().length - 1].value.mape_pct === null ? 'нет данных' : evaluations()[evaluations().length - 1].value.mape_pct + '%') + '.' : ''));
     L.push('');
-    L.push('## 4. KPI-гейты (последняя заполненная неделя)');
+    L.push('## 4. KPI-гейты');
     var gates = [];
-    if (lastP) {
-      gates.push(['опоздания ≤ 7%', lastP.lateness <= 7, lastP.lateness + '%']);
-      gates.push(['обращения ≤ 5%', lastP.appeals <= 5, lastP.appeals + '%']);
-      gates.push(['ТМЦ = 100%', lastP.tmc >= 100, lastP.tmc + '%']);
-      gates.push(['куратор ≥ 90%', lastP.curatorMin >= 90, lastP.curatorMin + '%']);
-      gates.push(['выходы ≥ 95%', lastP.exits >= 95, lastP.exits + '%']);
+    var gateW = 0, gateP = null;
+    for (var gw = TOTAL_WEEKS; gw >= 1; gw--) {
+      if (weekComplete(gw) && profitForWeek(gw)) { gateW = gw; gateP = profitForWeek(gw); break; }
     }
-    gates.forEach(function (g) { L.push('- ' + (g[1] ? '[OK] ' : '[НЕТ] ') + g[0] + ': ' + g[2]); });
+    if (!gateP) {
+      L.push('Нет ни одной недели с полным набором обязательных полей — гейты не считаются. Заполните недели (раздел 0).');
+    } else {
+      L.push('Неделя ' + gateW + ' — последняя с полными данными.');
+      gates = gatesFor(gateW, calF);
+      gates.forEach(function (g) {
+        L.push('- ' + (g.measured ? (g.ok ? '[OK] ' : '[НЕТ] ') : '[Н/Д] ') + g.name + ': ' + g.value +
+          (g.measured ? '' : ' — ' + g.note + ', в итог не входит') + '.');
+      });
+      var notMeasured = gates.filter(function (g) { return !g.measured; });
+      var measuredGates = gates.filter(function (g) { return g.measured; });
+      L.push('- Итог: ' + measuredGates.filter(function (g) { return g.ok; }).length + ' из ' + measuredGates.length + ' измеренных гейтов пройдено' +
+        (notMeasured.length ? '; ' + notMeasured.length + ' гейт(ов) [Н/Д] — дозаполните: ' + notMeasured.map(function (g) { return g.name; }).join(', ') + ' на неделе ' + gateW : '') + '.');
+    }
     var tail = weekData(lastW).finalPlan || weekData(lastW).stabilityPlan || '';
-    if (tail) {
-      L.push('');
-      L.push('## 5. Что осталось сделать');
-      L.push(String(tail));
-    }
+    L.push('');
+    L.push('## 5. Что осталось сделать');
+    L.push(tail ? String(tail) : 'не заполнено (поле «Что остаётся сделать после 6-й недели» пустое).');
     L.push('');
     L.push('## 6. JSON для оценки в ИИ');
     var summary = {
       model_version: MODEL_VERSION,
       schema_version: SCHEMA_VERSION,
+      analysis_ready: ready.ready,
+      coverage: {
+        complete_weeks: ready.completeWeeks,
+        total_weeks: ready.totalWeeks,
+        missing_fields_total: ready.missingTotal,
+        incomplete: ready.incomplete.map(function (c) { return { week: c.week, filled: c.filled, required: c.required, missing_fields: c.missing }; })
+      },
       baseline_profit_rub_day: p1 ? p1.profit : null,
+      calibration: {
+        zones_count: calF.zonesCount,
+        orders_per_zone_day: calF.ordersPerZoneDay,
+        orders_per_day: calF.zonesCount * calF.ordersPerZoneDay,
+        price_rub: calF.price,
+        margin_pct: calF.marginPct,
+        margin_rub_per_order: Math.round(calF.price * calF.marginPct / 100 * 10) / 10,
+        rate_rub: calF.courierCost,
+        contribution_rub_per_order: Math.round((calF.price * calF.marginPct / 100 - calF.courierCost) * 10) / 10
+      },
+      loss_weights: {
+        kL_pct_margin_per_1pct_lateness: calF.kL,
+        kA_pct_margin_per_1pct_appeals: calF.kA,
+        kT_pct_margin_per_1pct_tmc_gap: calF.kT,
+        kE_pct_margin_per_1pct_exits_gap: calF.kE,
+        kC_pct_loss_per_curator_point: calF.kC,
+        curator_threshold_pct: calF.curatorThreshold,
+        curator_penalty_pct: calF.curatorPenaltyPct
+      },
+      loss_breakdown_note: 'Знаковое разложение вклада в прибыль, ₽/день. structural_unit_economics = заказы × (маржа − ставка); lateness/appeals/tmc/exits — потери по весам (со знаком минус); curator_multiplier — надбавка за дефицит готовности куратора; curator_penalty — штраф. Сумма всех полей плюс residual равна profit_rub_day; residual должен быть 0, иначе отчёт не сходится с моделью.',
       unit_economics: {
         price_rub: calF.price,
         margin_pct: calF.marginPct,
@@ -1782,35 +2975,172 @@
         courier_rate_rub: calF.courierCost,
         contribution_rub_per_order: Math.round(calF.price * calF.marginPct / 100 - calF.courierCost)
       },
+      curator_model: {
+        index_weights: CURATOR_WEIGHTS,
+        kC_pct_loss_per_point: calF.kC,
+        threshold_pct: calF.curatorThreshold,
+        penalty_pct: calF.curatorPenaltyPct,
+        note: 'обучение и вовлечённость куратора входят в индекс готовности и влияют на маржу через потери'
+      },
       final_week: lastW || null,
       final_profit_rub_day: lastP ? lastP.profit : null,
       delta_vs_baseline_pct: (p1 && lastP && p1.profit) ? Math.round(((lastP.profit - p1.profit) / Math.max(1, Math.abs(p1.profit))) * 1000) / 10 : null,
+      breakeven: (function () {
+        var pBe = gateP || lastP;
+        if (!pBe) return null;
+        var be = breakevenOf(pBe, calF);
+        return {
+          week: gateW || lastW, loss_share_pct: be.lossSharePct,
+          current_margin_rub_per_order: be.currentMarginRub, current_price_rub: be.currentPriceRub,
+          breakeven_margin_rub: be.marginRub, breakeven_price_rub: be.priceRub,
+          target_margin_rub: be.targetMarginRub, target_price_rub: be.targetPriceRub,
+          margin_gap_rub: be.gapRub, buffer_rub: be.bufferRub, impossible_at_current_losses: be.impossible,
+          formula: 'маржа ≥ ставка / (1 − доля потерь); целевая маржа = безубыточная + буфер'
+        };
+      })(),
+      breakeven_at_target_kpi: breakevenAtTargetKpi(calF),
       weeks: filled.map(function (w) {
         var p = profitForWeek(w);
-        return { week: w, lateness_pct: p.lateness, appeals_pct: p.appeals, tmc_pct: p.tmc, exits_pct: p.exits, curator_pct: p.curatorMin, profit_rub_day: p.profit };
+        var cw = weekCoverage(w);
+        var be = breakevenOf(p, calF);
+        var q = { dataQuality: dataQualityOf(w) };
+        return {
+          week: w, complete: cw.complete, missing_fields: cw.missing,
+          orders_per_day: p.Q, rate_rub: p.rate,
+          margin_rub_per_order: Math.round(p.M * 10) / 10,
+          contribution_rub_per_order: Math.round(p.contribution * 10) / 10,
+          loss_share_pct: be.lossSharePct,
+          breakeven_margin_rub: be.marginRub,
+          breakeven_price_rub: be.priceRub,
+          target_margin_rub: be.targetMarginRub,
+          target_price_rub: be.targetPriceRub,
+          margin_gap_rub: be.gapRub,
+          lateness_pct: p.lateness, appeals_pct: p.appeals, tmc_pct: p.tmc, exits_pct: p.exits, curator_pct: p.curatorMin,
+          curator_index_pct: Math.round(p.curatorIndex * 10) / 10,
+          curator_loss_rub_day: Math.round(p.lossCurator),
+          loss_breakdown_rub_day: breakdownOf(p),
+          metric_source: {
+            lateness: metricSource(w, 'lateness'), appeals: metricSource(w, 'appeals'), tmc: metricSource(w, 'tmc'),
+            exits: metricSource(w, 'exits'), curator: metricSource(w, 'curatorAutonomy')
+          },
+          measured: q.dataQuality.measured,
+          measured_key_metrics: q.dataQuality.measured_count + '/' + q.dataQuality.measured_total,
+          curator_components_entered: q.dataQuality.curator_components_entered,
+          data_quality: { score: q.dataQuality.score, issues: q.dataQuality.issues },
+          profit_rub_day: p.profit
+        };
       }),
       ai_runs: runKeys.map(function (fw) {
         var r = runs()[String(fw)];
         var s = r.strategy;
+        var exp = expectedOf(s);
         var fact = r.toWeek ? profitForWeek(r.toWeek) : null;
+        var expB = exp.loss_breakdown_rub_day || null;
+        var actB = fact ? breakdownOf(fact) : null;
+        var bErr = null;
+        if (expB && actB) {
+          bErr = 0;
+          Object.keys(actB).forEach(function (k) { if (typeof expB[k] === 'number') bErr += Math.abs(expB[k] - actB[k]); });
+        }
+        var errRub = (fact && typeof exp.profit_rub_day === 'number') ? Math.round(exp.profit_rub_day - fact.profit) : null;
+        var errPct = (fact && fact.profit && typeof exp.profit_rub_day === 'number') ? Math.round(Math.abs(exp.profit_rub_day - fact.profit) / Math.abs(fact.profit) * 1000) / 10 : null;
         return {
           after_week: fw,
           to_week: r.toWeek,
+          schema_version: s.schema_version || 'strategy/1',
           strategy_name: s.strategy_name,
-          expected_profit_rub_day: s.expected_profit_rub_day,
+          expected_profit_rub_day: exp.profit_rub_day,
           actual_profit_rub_day: fact ? fact.profit : null,
+          error_rub_day: errRub,
+          error_pct_abs: errPct,
+          error_vs_baseline_pp: (fact && typeof exp.delta_vs_baseline_pct === 'number' && p1 && p1.profit)
+            ? Math.round((((fact.profit - p1.profit) / Math.max(1, Math.abs(p1.profit)) * 100) - exp.delta_vs_baseline_pct) * 10) / 10 : null,
+          expected_breakdown_rub_day: expB,
+          actual_breakdown_rub_day: actB,
+          breakdown_abs_error_rub_day: bErr,
+          expected_contribution_rub_per_order: exp.contribution_rub_per_order,
+          leading_indicators: (s.leading_indicators || []).length,
+          do_not_do: (s.do_not_do || []).length,
           risk_avg: Math.round(riskScore(s).avg * 100) / 100,
-          actions: s.actions.length,
+          actions: (s.actions || []).length,
           sources: (s.data_sources_used || []).length
         };
       }),
+      forecast_error: {
+        runs_with_fact: mapes.length,
+        mean_abs_error_rub_day: mapes.length ? Math.round(mean(mapErrorsRub)) : null,
+        mean_abs_error_pct: mapes.length ? Math.round(mean(mapes) * 10) / 10 : null,
+        note: 'MAPE по прибыли: проценты относительно |факта|. При отрицательной прибыли проценты не сопоставимы между неделями — ориентируйтесь на ₽/день.'
+      },
+      evaluations: evaluations().map(function (e) {
+        return {
+          at: e.at, schema_version: e.schema, verdict: String(e.value.verdict).slice(0, 300),
+          mape_pct: e.value.mape_pct, mape_status: e.value.mape_status,
+          risk_score: e.value.risk_score, risk_scale: e.value.risk_scale,
+          confidence_in_verdict: e.value.confidence_in_verdict,
+          gaps: e.value.gaps_ranked.length, do_not_do: e.value.do_not_do.length,
+          benchmark_status: e.value.benchmark_status
+        };
+      }),
       kpi: lastP ? { lateness_pct: lastP.lateness, appeals_pct: lastP.appeals, tmc_pct: lastP.tmc, exits_pct: lastP.exits, curator_pct: lastP.curatorMin } : null,
-      gates_passed: gates.length ? gates.every(function (g) { return g[1]; }) : false
+      kpi_week: lastW || null,
+      kpi_complete: lastW ? weekComplete(lastW) : false,
+      gates_week: gateW || null,
+      gates: (gates || []).map(function (g) {
+        return { name: g.name, value: g.value, ok: g.ok, measured: g.measured, source: g.source, note: g.note };
+      }),
+      gates_measured: (gates || []).filter(function (g) { return g.measured; }).length,
+      gates_total: (gates || []).length,
+      gates_note: (gates || []).some(function (g) { return !g.measured; })
+        ? 'Гейты с measured = false ([Н/Д]) не участвуют в gates_passed: метрика на этой неделе не измерялась.'
+        : '',
+      gates_passed: gatesPassed(gates),
+      data_quality: { score: projQ.score, weeks: projQ.weeks, issues: projQ.issues, scale: '0-1 (введено = 1, унаследовано = 0.5, дефолт = 0)' },
+      data_provenance: {
+        state_version: state.stateVersion || STATE_VERSION,
+        saved_model_version: state.modelVersionSaved || null,
+        migrated_from: state.migratedFrom || null,
+        needs_review_weeks: reviewW,
+        note: reviewW.length ? 'числа этих недель пересчитаны по формуле 1.3.x и не подтверждены пользователем' : ''
+      },
+      benchmarks: bmCmp.map(function (b) {
+        return { metric: b.metric, metric_key: b.metric_key, value: b.market_value, unit: b.unit,
+          current_value: b.current_value, delta: b.delta, better_when: b.better, verdict: b.verdict, source: b.source, date: b.date };
+      }),
+      benchmark_status: benchmarkStatusOf(),
+      benchmark_note: 'Бенчмарки вводит пользователь; без источника и даты не принимаются. Рыночные числа нельзя придумывать.'
     };
     L.push(JSON.stringify(summary, null, 2));
     L.push('');
-    L.push('## 7. Задача ИИ-оценщику');
-    L.push('Оцени план и результат: сравни ожидаемую и фактическую прибыль по неделям, посчитай MAPE и риск-скор, укажи 3 расхождения и одно действие с максимальным эффектом. Ответ — JSON: { "verdict": "string", "mape_pct": 0, "top_effect_action": "string", "gaps": ["string"], "next_3_weeks": ["string"] }.');
+    L.push('## 7. Задача ИИ-оценщику (схема ' + EVAL_SCHEMA_VERSION + ')');
+    L.push('Оцени план и результат: сравни ожидаемую и фактическую прибыль и разложение по неделям, ошибку прогноза, риск-скор, 3 расхождения с доказательствами и одно действие с максимальным эффектом. ' +
+      'Учти: обучение и вовлечённость куратора влияют на маржу через потери (индекс готовности и kC). ' +
+      'Если analysis_ready = false или у недели complete = false / metric_source ≠ entered — не считай по ней MAPE и не делай выводов, а перечисли, каких данных не хватает. ' +
+      'Нет данных — null, а не 0. Ответ — строго один JSON-объект:');
+    [
+      '{',
+      '  "schema_version": "' + EVAL_SCHEMA_VERSION + '",',
+      '  "verdict": "строка",',
+      '  "mape_pct": null,',
+      '  "mape_status": "' + EVAL_MAPE_STATUS.join(' | ') + '",',
+      '  "error_rub_day": null,',
+      '  "error_vs_baseline_pp": null,',
+      '  "risk_score": 0.0,',
+      '  "risk_scale": "0-1 (0 — низкий, 1 — критический)",',
+      '  "confidence_in_verdict": 0.0,',
+      '  "confidence_reason": "строка",',
+      '  "loss_breakdown_rub_day": { "structural_unit_economics": 0, "lateness": 0, "appeals": 0, "tmc": 0, "exits": 0, "curator_multiplier": 0, "curator_penalty": 0, "residual": 0 },',
+      '  "gaps_ranked": [{ "rank": 1, "gap": "строка", "impact_rub_day": 0, "evidence": "строка", "fixability": "low | mid | high" }],',
+      '  "top_effect_action": "строка",',
+      '  "next_3_weeks": [{ "week": 7, "leading": { "contribution_rub_per_order": 0 }, "lagging": { "profit_rub_day": 0 } }],',
+      '  "do_not_do": ["строка"],',
+      '  "data_quality": { "score": 0.0, "issues": ["строка"] },',
+      '  "benchmarks": [],',
+      '  "benchmark_status": "not_connected",',
+      '  "open_questions": ["строка"]',
+      '}'
+    ].forEach(function (x) { L.push(x); });
+    L.push('Правила: нет данных — null, а не 0; risk_score и confidence_in_verdict — числа 0…1 плюс обязательная шкала; каждое расхождение — с evidence и impact_rub_day; gaps_ranked отсортировать по рангу; next_3_weeks — три недели с leading-показателями; do_not_do — минимум один пункт (при вкладе с заказа ≤ 0 обязательно «не масштабировать объём»); бенчмарки без источника не приводить; целевые числа маржи бери из breakeven / breakeven_at_target_kpi сводки, не придумывай. Ответ проверяется в приложении кнопкой «Проверить оценку».');
     return L.join('\n');
   }
 
@@ -1838,18 +3168,30 @@
     if (block) block.style.display = state.finalReport ? 'block' : 'none';
   }
 
+  function updateMigrationNotice() {
+    var block = document.getElementById('migrationNotice');
+    var text = document.getElementById('migrationText');
+    if (text) text.textContent = state.migrationNotice || '';
+    if (block) block.style.display = state.migrationNotice ? 'block' : 'none';
+  }
+
   function render(noScroll) {
-    renderWeeks(); renderQuestions(); renderCharts(); updateResult(); updateAiReport(); updatePrompt(); updateAiPanels(); updateLiveBar();
-    if (!noScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+    renderWeeks(); renderQuestions(); renderCharts(); updateResult(); updateAiReport(); updatePrompt(); updateAiPanels(); updateLiveBar(); updateMigrationNotice();    if (!noScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     load(); render();
+    // Бенчмарки рынка спрашиваем при старте: без них в отчёте нет рыночных чисел
+    if (!benchmarkEntries().length && !state.benchmarkAsked) benchmarkEditing = true;
+    renderBenchmarkCard();
     document.getElementById('nextBtn').addEventListener('click', function () { if (currentWeek < TOTAL_WEEKS) { currentWeek++; save(); render(); } });
     document.getElementById('prevBtn').addEventListener('click', function () { if (currentWeek > 1) { currentWeek--; save(); render(); } });
     document.getElementById('resetBtn').addEventListener('click', function () {
       if (!confirm('Сбросить все недели?')) return;
-      localStorage.removeItem(KEY); state.weeks = {}; state.aiRuns = {}; state.finalReport = ''; currentWeek = 1; aiPanelWeek = 0; render();
+      localStorage.removeItem(KEY); state.weeks = {}; state.aiRuns = {}; state.evaluations = []; state.needsReview = {};
+      state.benchmarks = {}; state.benchmarkAsked = false;
+      state.finalReport = ''; state.migrationNotice = ''; state.migratedFrom = null; state.modelVersionSaved = null;
+      currentWeek = 1; aiPanelWeek = 0; benchmarkEditing = true; render(); renderBenchmarkCard();
     });
     resultEl.addEventListener('click', function () {
       resultEl.select();
@@ -1870,6 +3212,41 @@
     });
     var applyBtn = document.getElementById('applyAiBtn');
     if (applyBtn) applyBtn.addEventListener('click', applyFromText);
+    var checkEvalBtn = document.getElementById('checkEvalBtn');
+    if (checkEvalBtn) checkEvalBtn.addEventListener('click', checkEvaluationFromText);
+    var migBtn = document.getElementById('migrationOkBtn');
+    if (migBtn) migBtn.addEventListener('click', function () {
+      var left = weeksNeedingReview();
+      if (left.length) { currentWeek = left[0]; save(); render(true); }
+      setStatus(left.length
+        ? 'Проверьте неделю ' + left[0] + ': значения пересчитаны после переноса проекта — нажмите «Подтвердить показанные значения».'
+        : 'Все недели после переноса проверены.', left.length > 0);
+    });
+
+    var bmSave = document.getElementById('benchmarkSaveBtn');
+    if (bmSave) bmSave.addEventListener('click', saveBenchmarksFromForm);
+    var bmSkip = document.getElementById('benchmarkSkipBtn');
+    if (bmSkip) bmSkip.addEventListener('click', function () {
+      applyBenchmarks({}, true);
+      benchmarkEditing = false;
+      renderBenchmarkCard();
+      updateAiReport();
+      setBenchmarkStatus('Бенчмарки не подключены: в отчёте будет benchmark_status = not_connected, рыночные числа не подставляются.', false);
+    });
+    var bmEdit = document.getElementById('benchmarkEditBtn');
+    if (bmEdit) bmEdit.addEventListener('click', function () {
+      benchmarkEditing = true;
+      renderBenchmarkCard();
+      var card = document.getElementById('benchmarkCard');
+      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    var bmOpen = document.getElementById('benchmarkOpenBtn');
+    if (bmOpen) bmOpen.addEventListener('click', function () {
+      benchmarkEditing = true;
+      renderBenchmarkCard();
+      var card = document.getElementById('benchmarkCard');
+      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     var exportBtn = document.getElementById('exportBtn');
     if (exportBtn) exportBtn.addEventListener('click', exportState);
     var importFile = document.getElementById('importFile');
@@ -1879,6 +3256,18 @@
     });
     var finalBtn = document.getElementById('finalBtn');
     if (finalBtn) finalBtn.addEventListener('click', function () {
+      var ready = reportReadiness();
+      if (!ready.ready) {
+        var first = ready.incomplete[0];
+        currentWeek = first.week;
+        save();
+        render(true);
+        setStatus('Анализ заблокирован: полных недель ' + ready.completeWeeks + ' из ' + ready.totalWeeks + ', не хватает ' + ready.missingTotal + ' обязательных полей.' +
+          (ready.reviewWeeks.length ? ' Недель к проверке после переноса проекта: ' + ready.reviewWeeks.join(', ') + '.' : '') +
+          ' Первая неполная — неделя ' + first.week + (first.missingLabels.length ? ': ' + first.missingLabels.join('; ') : '') +
+          (first.needsReview ? ' — ' + first.reviewNote : '') + '. Нажмите «Подтвердить показанные значения» или заполните поля.', true);
+        return;
+      }
       var text = buildFinalReport();
       state.finalReport = text;
       save();
