@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width:320px; margin:0; padding:12px; font:13px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; color:#1d2430; background:#f6f7f9; }
+  h1 { font-size:14px; margin:0 0 8px; }
+  .row { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+  label { flex:0 0 auto; color:#667085; font-size:12px; }
+  input[type=text] { flex:1; min-width:0; padding:7px 8px; border:1px solid #e3e6ea; border-radius:8px; font-size:13px; }
+  select { flex:1; padding:7px 8px; border:1px solid #e3e6ea; border-radius:8px; font-size:13px; background:#fff; }
+  button { width:100%; padding:9px; border:0; border-radius:9px; background:#0b8a4b; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.55; cursor:default; }
+  button.secondary { background:#fff; color:#1d2430; border:1px solid #e3e6ea; margin-top:6px; }
+  .status { margin:8px 0 0; padding:8px; border-radius:8px; font-size:12px; background:#fff; border:1px solid #e3e6ea; white-space:pre-wrap; word-break:break-word; }
+  .status.err { color:#b42318; border-color:#fecdca; background:#fff5f4; }
+  .status.ok { color:#0a6b3b; border-color:#0b8a4b; background:#effaf4; }
+  table.kv { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
+  table.kv td { padding:3px 4px; border-bottom:1px solid #eef1f4; }
+  table.kv td:last-child { text-align:right; font-weight:600; }
+  .hint { color:#667085; font-size:11px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <h1>DarkStore → Superset</h1>
+  <div class="row"><label for="shopno">Даркстор</label><input type="text" id="shopno" placeholder="7745 (пусто = все)" inputmode="numeric"></div>
+  <div class="row"><label for="period">Период</label><select id="period">
+    <option value="yesterday" selected>Вчера (полный день)</option>
+    <option value="today">Сегодня (неполный)</option>
+    <option value="7">Последние 7 дней</option>
+    <option value="custom">Дата…</option>
+  </select></div>
+  <div class="row" id="dateRow" style="display:none;"><label for="date">Дата</label><input type="text" id="date" placeholder="YYYY-MM-DD" inputmode="numeric"></div>
+  <button id="pullBtn">1 · Загрузить данные</button>
+  <div id="preview"></div>
+  <button id="applyBtn" class="secondary" style="display:none;">2 · Вставить в darkStoreBB</button>
+  <button id="jsonBtn" class="secondary" style="display:none;">3 · Скачать JSON</button>
+  <div id="status" class="status" hidden></div>
+  <div class="hint" id="tabHint"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

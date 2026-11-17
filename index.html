@@ -243,10 +243,11 @@
 </form>
 
 <div class="sticky">
-  <button type="button" class="secondary" id="resetBtn">Сброс</button>
-  <button type="button" class="secondary" id="prevBtn">←</button>
-  <button type="button" id="nextBtn">Далее →</button>
-  <button type="button" class="ai" id="copyAiBtn">Отчёт ИИ</button>
+  <button type="button" class="secondary" id="dsSupersetBtn" style="background:#0b8a4b;color:#fff;border-color:#0b8a4b;">Superset</button>
+  <button type="button" class="secondary" id="resetBtn">╨б╨▒╤А╨╛╤Б</button>
+  <button type="button" class="secondary" id="prevBtn">тЖР</button>
+  <button type="button" id="nextBtn">╨Ф╨░╨╗╨╡╨╡ тЖТ</button>
+  <button type="button" class="ai" id="copyAiBtn">╨Ю╤В╤З╤С╤В ╨Ш╨Ш</button>
 </div>
 
 <script>
@@ -3889,7 +3890,36 @@
       var out = document.getElementById('finalOut');
       if (out && out.value) copyText(out.value, copyFinalBtn);
     });
+
+    // ── кнопка «Superset» ──────────────────────────────────────
+    var dsBtn = document.getElementById('dsSupersetBtn');
+    if (dsBtn) dsBtn.addEventListener('click', function () {
+      var snap = null;
+      try { var raw = localStorage.getItem('darkstore_superset_snap'); if (raw) snap = JSON.parse(raw); } catch (e) {}
+      if (!snap) {
+        setStatus('Нет сохранённых данных Superset. Установите расширение «DarkStore Superset Bridge» или загрузите JSON вручную.', true);
+        return;
+      }
+      var mapped = snap.mapped || (window.SupersetCore && SupersetCore.mapToForm(snap.snapshot));
+      if (!mapped) { setStatus('Не удалось распознать снапшот.', true); return; }
+      applyPatch(mapped.patch, mapped.notes);
+      try { localStorage.setItem('darkstore_superset_snap', JSON.stringify(snap)); } catch (e) {}
+      setStatus('✓ Superset → форма: ' + (mapped.notes ? mapped.notes.join('; ') : JSON.stringify(mapped.patch)));
+      render(true);
+    });
   });
+
+  // ── глобальное API для расширения / bridge.js ─────────────────
+  window._dsApplyPatch = function (patch, notes) {
+    var w = '1';
+    if (!state.weeks[w]) state.weeks[w] = {};
+    Object.keys(patch).forEach(function (k) {
+      if (patch[k] != null && isFinite(Number(patch[k]))) state.weeks[w][k] = Number(patch[k]);
+    });
+    save();
+    render(true);
+    return { applied: patch, via: 'state' };
+  };
 })();
 </script>
 </body>
