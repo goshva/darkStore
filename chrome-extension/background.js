@@ -178,4 +178,16 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     });
     return true;
   }
+
+  // Пакет фактов: складываем дни в историю страницы и наносим на графики
+  if (msg.type === 'DARKSTORE_FACTS') {
+    findDarkstoreTab(function (ds) {
+      if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена.' }); return; }
+      ensureScripts(ds.id, ['superset-core.js', 'history.js', 'bridge.js'], function (err) {
+        if (err) { sendResponse({ ok: false, error: 'Инъекция скриптов: ' + err }); return; }
+        sendToTab(ds.id, { type: 'DARKSTORE_FACTS', snaps: msg.snaps || [], patch: msg.patch, notes: msg.notes }, sendResponse);
+      });
+    });
+    return true;
+  }
 });

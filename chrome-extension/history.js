@@ -40,21 +40,26 @@
     Object.keys(h.days).forEach(function (date) {
       var snap = h.days[date];
       var mon = C.mondayOf(date);
-      var w = h.weeks[mon] || (h.weeks[mon] = { monday: mon, days: 0, orders: 0, revenue: 0, _chk: 0, _slot: 0, partial: false });
+      var w = h.weeks[mon] || (h.weeks[mon] = { monday: mon, days: 0, orders: 0, revenue: 0, declined: 0, _chk: 0, _slot: 0, partial: false });
       w.days++;
       w.orders += snap.orders_per_day || 0;
+      w.declined += snap.qty_orders_declined || 0;
       w.revenue += snap.revenue_rub || 0;
       w._chk += (snap.avg_check_rub || 0) * (snap.orders_per_day || 0);
       w._slot += (snap.share_not_in_slot_pct || 0) * (snap.orders_per_day || 0);
       if (snap.partial) w.partial = true;
     });
+    var todayStr = C.iso(new Date());
     Object.keys(h.weeks).forEach(function (mon) {
       var w = h.weeks[mon];
       w.orders_per_day = w.days ? Math.round(w.orders / w.days) : null;
+      w.declined_per_day = w.days ? Math.round(w.declined / w.days) : null;
       w.avg_check_rub = w.orders ? Math.round(w._chk / w.orders) : null;
       w.share_not_in_slot_pct = w.orders ? Math.round(w._slot / w.orders * 100) / 100 : null;
       w.revenue_rub = Math.round(w.revenue);
-      w.complete = w.days >= 7 && !w.partial;
+      // неполная неделя и та, что ещё идёт (сегодняшний понедельник)
+      w.in_progress = C.addDays(C.parseISO(mon), 6) >= new Date(todayStr + 'T00:00:00');
+      w.complete = w.days >= 7 && !w.partial && !w.in_progress;
       delete w._chk; delete w._slot;
     });
   }

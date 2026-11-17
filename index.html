@@ -1911,11 +1911,11 @@
   function labelY(y) { return y < CHART_TOP + 12 ? y + 17 : y; }
 
   // ── факт/план: мост (chrome-extension/bridge.js) подкладывает сюда функции,
-  //    возвращающие доп. SVG-слой поверх графиков. __dsFacts.series(weekIdx) -> {orders, check, slot}
+  //    возвращающие доп. SVG-слой поверх графиков. Хук: factLine(X, Y, fmtV, title) -> svg-string
   window.__dsHooks = window.__dsHooks || {};
-  function factLayer(X, Y, fmtV) {
+  function factLayer(X, Y, fmtV, title) {
     var fn = window.__dsHooks.factLine;
-    return fn ? fn(X, Y, fmtV) : '';
+    try { return fn ? fn(X, Y, fmtV, title) : ''; } catch (e) { return ''; }
   }
 
   function svgLineChart(title, arr, opts) {
@@ -1967,7 +1967,7 @@
     });
 
     // слой исторических фактов (если подключён мостом)
-    var factSvg = factLayer(X, Y, fmt1);
+    var factSvg = factLayer(X, Y, fmt1, title);
     if (factSvg) svg += factSvg;
 
     return chartOpen(title, opts.hint) + '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '">' + svg + chartWeeksLabels(X, H) + '</svg></div>';
@@ -2010,7 +2010,7 @@
     });
 
     // слой исторических фактов (пунктиром, поверх баров)
-    var factBarSvg = factLayer(function (i) { return left + stepX * (i + 0.5); }, Y, function (v) { return Math.round(v).toLocaleString('ru-RU'); });
+    var factBarSvg = factLayer(function (i) { return left + stepX * (i + 0.5); }, Y, function (v) { return Math.round(v).toLocaleString('ru-RU'); }, title);
     if (factBarSvg) svg += factBarSvg;
 
     return chartOpen(title, opts.hint) + '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '">' + svg + chartWeeksLabels(function (i) { return left + stepX * (i + 0.5); }, H) + '</svg></div>';

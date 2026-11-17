@@ -15,8 +15,24 @@
 
   // Импорт снапшота из Superset → патч недели 1 (использует SupersetCore.mapToForm, если загружен).
   function importSnapshot(snap) {
+    // snap может быть: 1) {snapshot, mapped}  2) массив таких  3) чистый snapshot
+    if (Array.isArray(snap)) {
+      if (snap.length === 1) return importSnapshot(snap[0]);
+      var results = [];
+      snap.forEach(function (s) { results.push(importSnapshot(s)); });
+      return results;
+    }
     var mapped = snap.mapped || (window.SupersetCore && snap.snapshot ? SupersetCore.mapToForm(snap.snapshot) : null);
-    if (!mapped) throw new Error('Нет данных для маппинга: передайте объект из ds_snapshot.cjs или результат pull()');
+    if (!mapped) {
+      // fallback: попытаться сконструировать mapped из snapshot напрямую
+      if (snap.snapshot && window.SupersetCore) {
+        mapped = SupersetCore.mapToForm(snap.snapshot);
+      } else if (snap.orders_per_day != null) {
+        // snapshot прямо тут
+        mapped = window.SupersetCore ? SupersetCore.mapToForm(snap) : null;
+      }
+    }
+    if (!mapped) throw new Error('Нет данных для маппинга: передайте {snapshot, mapped} из ds_snapshot.cjs или объект с orders_per_day');
     applyPatch(mapped.patch, mapped.notes);
     try { localStorage.setItem(KEY, JSON.stringify(snap)); } catch (e) {}
     return mapped;
@@ -113,9 +129,22 @@
     txt = (txt || '').trim();
     if (!txt) throw new Error('Пусто');
     var j = JSON.parse(txt);
-    var snap = j.result ? j : j.snapshot ? j : { snapshot: j };
-    if (!snap.snapshot && !snap.orders_per_day) throw new Error('Не похоже на снапшот Superset (нет orders_per_day/snapshot)');
-    return snap;
+    // формы: [{snapshot,mapped},...] | {snapshot,mapped} | чистый snapshot | {days:{...}} из __dsHistory
+    if (Array.isArray(j)) return j.map(parseSnapObj);
+    return parseSnapObj(j);
+  }
+
+  function parseSnapObj(j) {
+    if (j && j.snapshot) return j;
+    if (j && j.orders_per_day != null) return { snapshot: j, mapped: window.SupersetCore ? SupersetCore.mapToForm(j) : null };
+    if (j && j.days && typeof j.days === 'object') {
+      // экспорт __dsHistory: превращаем дни в список {snapshot}
+      return Object.keys(j.days).sort().map(function (d) {
+        var s = j.days[d];
+        return { snapshot: s, mapped: window.SupersetCore ? SupersetCore.mapToForm(s) : null };
+      });
+    }
+    throw new Error('Не похоже на снапшот Superset (нет orders_per_day/snapshot/days)');
   }
 
   function pullFromSuperset(btn) {
@@ -185,13 +214,18 @@
 
     document.getElementById('dsBImportBtn').addEventListener('click', function () {
       modal('Импорт снапшота Superset',
-        '<textarea id="dsBJsonTa" placeholder=\'{"orders_per_day":1748,"avg_check_rub":1516,...}\' spellcheck="false"></textarea>',
+        '<textarea id="dsBJsonTa" placeholder=\'[{"snapshot":{...},"mapped":{...}}, ...] или {"orders_per_day":1748,...}\' spellcheck="false"></textarea>',
         function (m) {
           var ta = m.querySelector('#dsBJsonTa');
           try {
-            var snap = parseSnapText(ta.value);
-            var r = importSnapshot(snap);
-            setStatus('Импортировано: ' + (r.notes ? r.notes.join('; ') : ''));
+            var parsed = parseSnapText(ta.value);
+            var list = Array.isArray(parsed) ? parsed : [parsed];
+            // складываем все дни в историю (для графика факт/план)
+            if (window.__dsHistory) {
+              window.__dsHistory.addDays(list.map(function (x) { return x.snapshot; }).filter(Boolean));
+            }
+            var r = importSnapshot(list.length === 1 ? list[0] : list);
+            setStatus('Импортировано дней: ' + list.length + '. ' + ((Array.isArray(r) ? r[r.length - 1] : r).notes || []).join('; '));
             if (typeof window.render === 'function') window.render(true);
           } catch (e) { setStatus('Ошибка импорта: ' + e.message, true); return false; }
         });
@@ -244,44 +278,92 @@
   };
 
   // ── рисование исторических фактов поверх графиков ──
-  // Подключается в window.__dsHooks.factLine и window.__dsFacts.add()
-  (function initFacts() {
-    if (typeof SupersetCore !== 'undefined' && window.__dsHistory) {
-      window.__dsFacts = {
-        _data: [],
-        add: function (snaps) {
-          // snaps = [{snapshot:{date, orders_per_day, avg_check_rub, share_not_in_slot_pct}}, ...]
-          snaps.forEach(function (s) { window.__dsHistory.addDay(s.snapshot); });
-        },
-        getWeeks: function (planWeeks) {
-          var m = window.__dsHistory;
-          return m.compareWithPlan(planWeeks, m.load().weeks);
-        },
-        render: function (planWeeks) {
-          var m = window.__dsHistory;
-          var w = m.load().weeks;
-          var keys = Object.keys(w).sort();
-          // map: индекс в неделе → факт (среднее по дням недели)
-          var factByWeekIdx = [];
-          keys.forEach(function (mon, i) {
-            if (i >= TOTAL_WEEKS) return;
-            var fw = w[mon];
-            if (fw && fw.orders_per_day) {
-              factByWeekIdx[i] = { orders: fw.orders_per_day, check: fw.avg_check_rub, slot: fw.share_not_in_slot_pct };
-            }
-          });
-          // установить хук для line-графиков
-          window.__dsHooks.factLine = function (X, Y, fmtV) {
-            var svg = '';
-            factByWeekIdx.forEach(function (f, i) {
-              if (f == null) return;
-              svg += '<line x1="' + X(i).toFixed(1) + '" y1="' + Y(f.orders).toFixed(1) + '" x2="' + (X(i) + 1).toFixed(1) + '" y2="' + Y(f.orders).toFixed(1) + '" stroke="#7a5af8" stroke-width="2" stroke-dasharray="4 4" opacity="0.7"><title>Факт Н' + (i + 1) + ': ' + fmtV(f.orders) + '</title></line>';
-            });
-            return svg;
-          };
+  var FACT_COLORS = { orders: '#7a5af8', check: '#175cd3', slot: '#f79009' };
+
+  function planWeeksFromState() {
+    // состояние страницы (state.weeks['1'..'6']) либо из localStorage (если IIFE не экспортирует)
+    try {
+      var raw = localStorage.getItem('darkstore_profit_live_v5');
+      if (raw) return JSON.parse(raw).weeks || {};
+    } catch (e) {}
+    return {};
+  }
+
+  function metricForChart(title, factRows) {
+    // подбираем метрику факта по заголовку графика
+    var t = String(title || '').toLowerCase();
+    if (/опозд/.test(t)) return 'slot';          // прокси: доля вне слота
+    if (/чек|ц/.test(t) && /₽|руб/.test(t)) return 'check';
+    if (/прибыль|вклад|потер/.test(t)) return null; // прибыль/потери фактом не покрываем
+    return 'orders';
+  }
+
+  function installFactsHooks() {
+    if (!window.__dsHistory || !window.__dsHooks) return;
+    window.__dsHooks.factLine = function (X, Y, fmtV, title) {
+      var rows = window.__dsHistory.compareWithPlan(planWeeksFromState());
+      if (!rows.length) return '';
+      var key = metricForChart(title, rows);
+      if (!key) return '';
+      var svg = '', color = FACT_COLORS[key];
+      rows.forEach(function (r, i) {
+        var f = r[key === 'slot' ? 'lateness' : key] && r[key === 'slot' ? 'lateness' : key].fact;
+        if (f == null) return;
+        var cx = X(i), cy = Y(f);
+        var p = r[key === 'slot' ? 'lateness' : key];
+        svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="3.5" fill="none" stroke="' + color + '" stroke-width="2">' +
+          '<title>Факт ' + r.week + ': ' + fmtV(f) + (p.plan != null ? ' · план ' + fmtV(p.plan) + ' · Δ ' + (p.diff > 0 ? '+' : '') + p.diff + (p.pct != null ? ' (' + p.pct + '%)' : '') : '') + '</title></circle>';
+        if (i > 0) {
+          var prev = rows[i - 1][key === 'slot' ? 'lateness' : key];
+          if (prev && prev.fact != null) {
+            svg += '<line x1="' + X(i - 1).toFixed(1) + '" y1="' + Y(prev.fact).toFixed(1) + '" x2="' + cx.toFixed(1) + '" y2="' + cy.toFixed(1) + '" stroke="' + color + '" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.7"/>';
+          }
         }
-      };
+      });
+      return svg;
+    };
+  }
+
+  function renderFactsPanel() {
+    cssInject();
+    var el = document.getElementById('dsFactsPanel');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'dsFactsPanel';
+      el.className = 'card';
+      var charts = document.getElementById('charts');
+      if (charts && charts.parentNode) charts.parentNode.insertBefore(el, charts);
+      else document.body.appendChild(el);
     }
+    if (!window.__dsHistory) { el.innerHTML = ''; return; }
+    var rows = window.__dsHistory.compareWithPlan(planWeeksFromState());
+    if (!rows.length) { el.innerHTML = '<h2>Факт vs план</h2><div class="hint">Нет фактических данных — загрузите недели через расширение или «Импорт JSON…».</div>'; return; }
+    function cell(c, unit) {
+      if (c.fact == null) return '<td class="na">нет</td>';
+      var d = c.diff == null ? '' : '<span style="color:' + (Math.abs(c.diff) < 0.05 ? '#667085' : (c.diff > 0 ? '#b42318' : '#0a6b3b')) + '">Δ ' + (c.diff > 0 ? '+' : '') + c.diff + (unit || '') + (c.pct != null ? ' (' + c.pct + '%)' : '') + '</span>';
+      return '<td>' + c.fact + (unit || '') + (d ? '<br><small>' + d + '</small>' : '') + '</td>';
+    }
+    var h = '<h2>Факт vs план (Superset)</h2><div class="matrix-wrap"><table class="matrix">' +
+      '<tr><th>Неделя</th><th>Заказы/день</th><th>Чек, ₽</th><th>Вне слота, %</th></tr>';
+    rows.forEach(function (r) {
+      h += '<tr><td class="m-name">' + r.week + (r.complete ? '' : ' <small>(' + r.days + ' дн.)</small>') + '</td>' +
+        cell(r.orders) + cell(r.check) + cell(r.lateness) + '</tr>';
+    });
+    h += '</table></div><div class="hint">Пунктир на графиках — фактические заказы/день и чек по неделям Пн–Вс.</div>';
+    el.innerHTML = h;
+  }
+
+  (function initFacts() {
+    if (typeof SupersetCore === 'undefined') return;   // history работает без ядра только если SupersetCore загружен (mondayOf и т.п.)
+    window.__dsFacts = {
+      add: function (snaps) {
+        snaps.forEach(function (s) { if (s) window.__dsHistory.addDay(s); });
+        renderFactsPanel();
+      },
+      clear: function () { try { localStorage.removeItem(window.__dsHistory.KEY); } catch (e) {} renderFactsPanel(); }
+    };
+    installFactsHooks();
+    setTimeout(renderFactsPanel, 300);   // после первого render страницы
   })();
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectUI);
