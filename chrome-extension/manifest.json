@@ -6,6 +6,7 @@
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
     "https://superset.svc.vkusvill.ru/*",
+    "https://goshva.github.io/darkStore/*",
     "file:///*",
     "http://localhost/*",
     "http://127.0.0.1/*"
@@ -23,7 +24,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["file:///*", "http://localhost/*", "http://127.0.0.1/*"],
+      "matches": ["https://goshva.github.io/darkStore/*", "file:///*", "http://localhost/*", "http://127.0.0.1/*"],
       "js": ["bridge.js"],
       "run_at": "document_idle"
     }

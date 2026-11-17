@@ -2,7 +2,10 @@
 'use strict';
 
 var SUPERSET_MATCH = 'https://superset.svc.vkusvill.ru/*';
-var DARKSTORE_GLOB = ['file:///*', 'http://localhost/*', 'http://127.0.0.1/*', 'https://*/*'];
+var DARKSTORE_GLOB = [
+  'https://goshva.github.io/darkStore/*',
+  'file:///*', 'http://localhost/*', 'http://127.0.0.1/*'
+];
 
 function findSupersetTab(cb) {
   chrome.tabs.query({ url: SUPERSET_MATCH }, function (tabs) { cb((tabs || [])[0] || null); });
@@ -14,8 +17,8 @@ function findDarkstoreTab(cb) {
     var list = tabs || [];
     var best = null;
     for (var i = 0; i < list.length; i++) {
-      if (/darkstore|index\.html/i.test(list[i].url || '')) { best = list[i]; break; }
-      if (!best && /^file:\/\//i.test(list[i].url || '')) best = list[i];
+      if (/goshva\.github\.io\/darkStore/i.test(list[i].url || '')) { best = list[i]; break; }
+      if (!best && /darkstore|index\.html/i.test(list[i].url || '')) best = list[i];
     }
     cb(best);
   });

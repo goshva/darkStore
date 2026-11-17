@@ -118,9 +118,52 @@
     return snap;
   }
 
+  function pullFromSuperset(btn) {
+    // 1) расширение? запрашиваем данные прямо со вкладки Superset
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+      setStatus('Запрос к Superset…');
+      if (btn) btn.textContent = '…';
+      chrome.runtime.sendMessage({ type: 'DARKSTORE_PULL_ALL' }, function (resp) {
+        if (btn) btn.textContent = 'Superset';
+        if (chrome.runtime.lastError || !resp || !resp.ok) {
+          setStatus((resp && resp.error) || (chrome.runtime.lastError && chrome.runtime.lastError.message) ||
+            'Вкладка Superset не найдена. Откройте дашборд services_lite и повторите.', true);
+          return;
+        }
+        var r = importSnapshot(resp.result);
+        setStatus('Superset → форма применено: ' + (r.notes ? r.notes.join('; ') : JSON.stringify(r.patch)));
+        if (typeof window.render === 'function') window.render(true);
+      });
+      return;
+    }
+    // 2) расширения нет — подсказка про CLI
+    modal('Данные из Superset',
+      '<p style="font-size:13px">Расширение <b>DarkStore Superset Bridge</b> не установлено, поэтому тянуть данные из браузера нельзя.<br>' +
+      'Варианты:<br>1) Установите расширение (chrome://extensions → «Загрузить распакованное» → папка <code>chrome-extension</code>) и откройте вкладку Superset.<br>' +
+      '2) Или получите файл в консоли: <code>node ds_snapshot.cjs 7745 &gt; snap.json</code> и импортируйте его кнопкой «Импорт JSON…».</p>');
+  }
+
   function injectUI() {
     cssInject();
     if (document.getElementById('dsBridgeBar')) return;
+
+    // Кнопка в sticky-бар: на локальном index.html она уже есть (#dsSupersetBtn со своим
+    // обработчиком внутри IIFE страницы), на GitHub Pages (старая версия) — создаём сами.
+    var existing = document.getElementById('dsSupersetBtn');
+    if (!existing) {
+      var sticky = document.querySelector('.sticky');
+      if (sticky) {
+        existing = document.createElement('button');
+        existing.type = 'button';
+        existing.id = 'dsSupersetBtn';
+        existing.className = 'secondary';
+        existing.style.cssText = 'background:#0b8a4b;color:#fff;border-color:#0b8a4b;';
+        existing.textContent = 'Superset';
+        existing.addEventListener('click', function () { pullFromSuperset(existing); });
+        sticky.insertBefore(existing, sticky.firstChild);
+      }
+    }
+
     var bar = document.createElement('div');
     bar.id = 'dsBridgeBar';
     bar.innerHTML = '<button type="button" id="dsBSupBtn">⚡ Из Superset</button>' +
@@ -138,28 +181,7 @@
       document.body.insertBefore(st, bar.nextSibling);
     }
 
-    document.getElementById('dsBSupBtn').addEventListener('click', function () {
-      // 1) расширение? запрашиваем данные прямо со вкладки Superset
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
-        setStatus('Запрос к Superset…');
-        chrome.runtime.sendMessage({ type: 'DARKSTORE_PULL_ALL' }, function (resp) {
-          if (chrome.runtime.lastError || !resp || !resp.ok) {
-            setStatus((resp && resp.error) || chrome.runtime.lastError && chrome.runtime.lastError.message ||
-              'Вкладка Superset не найдена. Откройте дашборд services_lite и повторите.', true);
-            return;
-          }
-          var r = importSnapshot(resp.result);
-          setStatus('Superset → форма применено: ' + (r.notes ? r.notes.join('; ') : JSON.stringify(r.patch)));
-          if (typeof window.render === 'function') window.render(true);
-        });
-        return;
-      }
-      // 2) расширения нет — подсказка про CLI
-      modal('Данные из Superset',
-        '<p style="font-size:13px">Расширение <b>DarkStore Superset Bridge</b> не установлено, поэтому тянуть данные из браузера нельзя.<br>' +
-        'Варианты:<br>1) Установите расширение (chrome://extensions → «Загрузить распакованное» → папка <code>chrome-extension</code>) и откройте вкладку Superset.<br>' +
-        '2) Или получите файл в консоли: <code>node ds_snapshot.cjs 7745 &gt; snap.json</code> и импортируйте его кнопкой «Импорт JSON…».</p>');
-    });
+    document.getElementById('dsBSupBtn').addEventListener('click', function () { pullFromSuperset(null); });
 
     document.getElementById('dsBImportBtn').addEventListener('click', function () {
       modal('Импорт снапшота Superset',
