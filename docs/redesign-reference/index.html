@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111a18">
+  <title>DarkStore Analytics Workspace — HTML reference v1.1</title>
+  <!--
+    HTML-ЭТАЛОН v1.1 (Stage 0.5). Основа — утверждённый дизайн «DarkStore Analytics Workspace».
+    Отличия v1.1: в макет встроены все реальные функциональные элементы приложения
+    (46 id из рабочего index.html), реальные формы и поля сохранены, демонстрационные значения помечены DEMO.
+    Скрипт приложения здесь НЕ подключён: это макет, а не рабочая страница.
+    Проверка: node docs/redesign-reference/check-reference.cjs
+  -->
+  <style>
+    /* ===================== ДИЗАЙН-СИСТЕМА (утверждённый макет) ===================== */
+    :root{
+      --bg:#f4f6f5;--surface:#fff;--surface-soft:#f8faf9;--ink:#18221e;--muted:#69766f;
+      --line:#e4eae6;--line-strong:#d7e0da;--green:#149447;--green-dark:#087638;--green-soft:#e8f7ed;
+      --green-pale:#f2fbf5;--red:#e56c7b;--red-soft:#fff0f1;--amber:#d79b2d;--amber-soft:#fff7e7;
+      --nav:#111a18;--nav-2:#1b2622;--nav-text:#d7e0db;--shadow:0 8px 26px rgba(26,48,36,.045);
+      --radius:15px;--radius-sm:10px;--sidebar:246px;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    }
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:88px}
+    body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+    button,a{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
+    .app{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:linear-gradient(180deg,var(--nav),#151e1b);color:var(--nav-text);padding:22px 14px 16px;display:flex;flex-direction:column;z-index:20}
+    .brand{display:flex;align-items:center;gap:12px;padding:0 8px 28px}.brand-mark{width:36px;height:36px;color:#20b45a;flex:none}.brand-name{font-size:19px;font-weight:800;letter-spacing:-.5px;color:#fff}.brand-sub{font-size:10px;color:#91a099;letter-spacing:.35px;margin-top:1px}
+    .nav{display:grid;gap:5px}.nav a{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;color:#c8d2cc;font-weight:560;transition:.18s}.nav a:hover{background:#26342e;color:#fff}.nav a.active{background:#138e43;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.nav svg{width:18px;height:18px;flex:none}
+    .nav-label{font-size:10px;color:#78877f;text-transform:uppercase;letter-spacing:1px;padding:23px 10px 8px}.project-mini{background:#202c27;border:1px solid #2c3b34;border-radius:12px;padding:11px;display:flex;gap:10px;align-items:center}.project-icon{width:34px;height:34px;border-radius:9px;background:#29463a;display:grid;place-items:center;color:#75d69a}.project-mini strong{display:block;color:#fff;font-size:12px}.project-mini small{color:#9fb0a6;font-size:10px}.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#25c35d;margin-right:5px}.sidebar-bottom{margin-top:auto;border-top:1px solid #2b3832;padding-top:12px}.sidebar-bottom a{display:flex;align-items:center;gap:12px;padding:10px 12px;color:#c8d2cc;border-radius:9px}.sidebar-bottom a:hover{background:#26342e}
+    .main{margin-left:var(--sidebar);min-height:100vh}.topbar{height:76px;background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px;position:sticky;top:0;z-index:10;backdrop-filter:blur(12px)}.top-title h1{font-size:22px;letter-spacing:-.6px;margin:0;font-weight:780}.top-title p{margin:2px 0 0;color:var(--muted);font-size:12px}.top-actions{display:flex;align-items:center;gap:18px}.cycle-select{display:flex;align-items:center;gap:10px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;padding:8px 12px;min-width:230px;text-align:left;color:var(--ink)}.cycle-select small{display:block;color:var(--muted);font-size:10px}.icon-button{border:0;background:transparent;color:#59675f;padding:7px;position:relative}.notify-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--green);right:5px;top:4px;border:1px solid white}.avatar{width:34px;height:34px;border-radius:50%;background:#e7ece9;color:#425048;font-weight:750;display:grid;place-items:center;font-size:12px}
+    .content{max-width:1600px;margin:0 auto;padding:20px 22px 34px}.grid{display:grid;gap:14px}.overview-row{grid-template-columns:1fr 1.16fr}.middle-row{grid-template-columns:1.12fr 1fr}.matrix-row{grid-template-columns:1.58fr .92fr}.bottom-row{grid-template-columns:1.15fr 1.16fr 1.05fr}.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);min-width:0}
+    .card-pad{padding:14px 15px}.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}.card-title{font-size:16px;font-weight:760;letter-spacing:-.25px;margin:0;display:flex;align-items:center;gap:8px}.info{width:15px;height:15px;border:1.5px solid #87958d;color:#75847b;border-radius:50%;font-size:9px;display:inline-grid;place-items:center;font-weight:700}.text-link{font-size:11px;color:var(--green-dark);font-weight:700;white-space:nowrap}.text-link:hover{text-decoration:underline}.muted{color:var(--muted)}.eyebrow{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.65px;font-weight:700}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}.kpi{padding:13px;border:1px solid #e3eee6;border-radius:11px;background:linear-gradient(135deg,#effaf2,#e5f6e9);min-height:112px}.kpi:nth-child(2){background:linear-gradient(135deg,#f8fbf9,#f1f8f3);border-color:#e7eee9}.kpi-top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700}.kpi-top svg{color:var(--green);width:20px;height:20px}.kpi-value{font-size:25px;font-weight:820;letter-spacing:-.7px;margin:6px 0 2px}.kpi-foot{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}.delta{display:inline-flex;align-items:center;gap:3px;background:#d4f5dc;color:#087b35;border-radius:20px;padding:3px 7px;font-size:10px;font-weight:750}
+    .weeks{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}.week{border:1px solid var(--line);background:#fbfcfb;border-radius:10px;padding:10px 6px 8px;text-align:center;min-width:0;transition:.15s}.week:hover{border-color:#9bd5ad}.week strong{display:block;font-size:11px}.week small{display:block;font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap}.week b{display:block;font-size:14px;margin:9px 0 6px}.week .week-dot{width:7px;height:7px;border-radius:50%;background:#23a34f;margin:0 auto}.week.selected{background:var(--green-soft);border:1.5px solid var(--green);box-shadow:0 0 0 2px rgba(20,148,71,.06)}.week.selected small{color:var(--green-dark)}
+    .operations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.op{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;align-items:flex-start;gap:10px;min-height:76px;background:#fff;transition:.15s}.op:hover{border-color:#a7d9b5;background:#fbfefc}.op-icon{color:var(--green);width:23px;height:23px;flex:none}.op strong{font-size:11px;display:block;line-height:1.25}.op p{margin:3px 0 5px;color:var(--muted);font-size:9px;line-height:1.3}.count{display:inline-block;background:#ddf6e4;color:#087d37;border-radius:20px;padding:2px 7px;font-size:9px;font-weight:750}
+    .chart-legend{display:flex;gap:14px;justify-content:center;font-size:10px;color:#56635c;margin:0 0 4px}.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}.chart-wrap{width:100%;overflow-x:auto}.chart-wrap svg{width:100%;height:auto;display:block}.chart-grid{stroke:#e8ede9;stroke-width:1}.chart-label{fill:#6e7b73;font-size:10px}.chart-bar{fill:#79d88c}.chart-loss{fill:#f4a6b0}.chart-line{fill:none;stroke:#155b36;stroke-width:2.2}.chart-point{fill:#fff;stroke:#155b36;stroke-width:1.8}
+    .table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:10px;white-space:nowrap}th{text-align:left;color:#59665f;background:#f7f9f8;font-weight:750;padding:8px 7px;border-bottom:1px solid var(--line)}td{padding:7px;border-bottom:1px solid #edf1ee}tbody tr:last-child td{border-bottom:0}.metric-name{font-weight:700}.metric-value{text-align:center}.good-cell{background:#e7f8eb;color:#087a35;border-radius:5px;font-weight:750}.up{color:#07913d;font-weight:750}.summary-list{display:grid}.summary-item{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #edf1ee;font-size:11px}.summary-item:last-child{border-bottom:0}.check{width:16px;height:16px;border-radius:50%;background:#e1f6e7;color:#07833a;display:grid;place-items:center;flex:none;font-size:10px;font-weight:900}.summary-item strong{font-weight:760}.positive{color:var(--green-dark);font-weight:750}
+    .workflow{display:grid;gap:7px}.workflow-step{display:grid;grid-template-columns:23px 1fr auto;align-items:center;gap:9px;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}.step-number{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;background:#e0f6e6;color:#087b36;font-weight:800;font-size:11px}.step-number.done{background:#159348;color:white}.step-copy strong{display:block;font-size:11px}.step-copy small{display:block;color:var(--muted);font-size:9px}.mini-button{border:1px solid var(--line-strong);background:#fff;border-radius:7px;padding:6px 8px;font-size:9px;font-weight:650;color:#45534b;white-space:nowrap}.mini-button:hover{border-color:var(--green);color:var(--green-dark)}.step-current{border-color:#9bd6ad;background:#f8fdf9}.benchmark-table td:last-child,.benchmark-table th:last-child{text-align:right}.benchmark-table td:nth-child(2),.benchmark-table td:nth-child(3){text-align:center}.benchmark-table .ours{background:#e5f7e9;color:#087a35;font-weight:750;border-radius:5px}.project-box{border:1px solid var(--line);border-radius:11px;padding:11px}.project-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.project-top strong{font-size:14px}.status{font-size:9px;color:#087d37;background:#e2f7e8;padding:4px 8px;border-radius:20px;font-weight:750}.project-meta{display:grid;gap:8px;margin:12px 0;color:#65736b;font-size:10px}.project-meta span{display:flex;gap:7px;align-items:flex-start}.progress-head{display:flex;justify-content:space-between;font-size:10px;font-weight:700;margin-bottom:5px}.progress{height:8px;border-radius:20px;background:#e9eeeb;overflow:hidden}.progress span{display:block;width:92%;height:100%;background:linear-gradient(90deg,#159447,#35b963);border-radius:20px}.project-actions{display:flex;gap:8px;margin-top:13px}.action-button{border:1px solid var(--line-strong);border-radius:8px;background:#fff;padding:8px 10px;font-size:10px;font-weight:700;flex:1;color:#435149}
+    .section-gap{margin-top:14px}.footnote{font-size:10px;color:#89958e;text-align:right;margin:12px 2px 0}.mobile-menu{display:none}.mobile-scrim{display:none}
+    @media(max-width:1180px){:root{--sidebar:218px}.content{padding:16px}.overview-row,.middle-row{grid-template-columns:1fr 1fr}.matrix-row{grid-template-columns:1fr}.bottom-row{grid-template-columns:1fr 1fr}.bottom-row .project-card{grid-column:span 2}.op{padding:8px;gap:7px}}
+    @media(max-width:820px){:root{--sidebar:0px}.sidebar{width:260px;transform:translateX(-100%);transition:transform .22s}.sidebar.open{transform:translateX(0)}.mobile-scrim.show{display:block;position:fixed;inset:0;background:rgba(10,20,15,.45);z-index:15}.main{margin-left:0}.mobile-menu{display:inline-grid;place-items:center;border:0;background:transparent;padding:6px;margin-right:8px;color:var(--ink)}.topbar{padding:0 16px;height:68px}.top-title h1{font-size:18px}.top-title p{font-size:10px}.top-actions{gap:7px}.cycle-select{min-width:0;padding:7px 9px}.cycle-select span{display:none}.avatar{width:30px;height:30px}.content{padding:14px}.overview-row,.middle-row{grid-template-columns:1fr}.matrix-row{grid-template-columns:1fr}.bottom-row{grid-template-columns:1fr 1fr}.bottom-row .project-card{grid-column:auto}}
+    @media(max-width:560px){.top-title p{display:none}.top-actions .icon-button{display:none}.cycle-select{max-width:142px;font-size:10px}.cycle-select small{font-size:9px}.content{padding:10px}.grid{gap:10px}.card-pad{padding:12px}.card-title{font-size:14px}.kpi{padding:10px;min-height:100px}.kpi-value{font-size:21px}.weeks{grid-template-columns:repeat(3,minmax(0,1fr))}.week{padding:8px 4px}.operations{grid-template-columns:repeat(2,minmax(0,1fr))}.op{min-height:76px}.bottom-row{grid-template-columns:1fr}.bottom-row .project-card{grid-column:auto}.workflow-step{grid-template-columns:23px 1fr}.workflow-step .mini-button{grid-column:2;justify-self:start}.project-actions{flex-direction:column}.chart-legend{gap:8px;font-size:9px}.footnote{text-align:left}.topbar{gap:5px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+    /* ============ ДОПОЛНЕНИЯ v1.1: реальные элементы приложения ============ */
+    /* Полоса качества данных (реальный #ytWrap > #ytBar) */
+    #ytWrap{position:fixed;top:0;left:0;right:0;height:4px;background:#e6ecef;z-index:60}
+    #ytBar{height:100%;width:0;background:var(--green);transition:width .35s cubic-bezier(.4,0,.2,1),background .35s}
+    #ytBar.warn{background:var(--amber)}#ytBar.good{background:var(--green)}
+    /* Баннер миграции проекта (реальный #migrationNotice) */
+    .app-notice{border-left:4px solid var(--amber);background:var(--amber-soft)}
+    .app-notice .card-title{color:#8a6416}
+    /* Демо-маркировка: все статические значения макета помечены DEMO */
+    .demo-badge{display:inline-block;background:#fff2d6;color:#8a6416;border:1px solid #f0d9a8;border-radius:20px;padding:2px 8px;font-size:9px;font-weight:800;letter-spacing:.4px;vertical-align:middle}
+    .demo-note{font-size:10px;color:#8a6416;background:var(--amber-soft);border:1px dashed #f0d9a8;border-radius:8px;padding:6px 8px;margin-top:8px}
+    /* Живая легенда приложения (реальный #liveLegend) в стиле KPI-карточки макета */
+    #liveLegend .row1{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+    #liveLegend .status{font-size:12px;font-weight:750;color:var(--green-dark)}
+    #liveLegend .status.low{color:#b42318}#liveLegend .status.mid{color:#8a6416}#liveLegend .status.high{color:var(--green-dark)}
+    #liveLegend .score{font-size:22px;font-weight:820;letter-spacing:-.6px}
+    #liveLegend .breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:10px;color:var(--muted)}
+    #liveLegend .breakdown b{color:var(--ink)}
+    #liveLegend .contrib{margin-top:8px;display:grid;gap:4px}
+    #liveLegend .c{display:grid;grid-template-columns:1fr 44px 74px;gap:8px;align-items:center;font-size:10px}
+    #liveLegend .c .b{height:6px;border-radius:3px;background:#eef1f4;overflow:hidden}
+    #liveLegend .c .b>i{display:block;height:100%;background:var(--green)}
+    #liveLegend .c.neg .b>i{background:var(--red)}
+    #liveLegend .c .v{text-align:right;color:var(--muted)}
+    #liveLegend .c .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* Плитки недель приложения (.wk) в стиле макета */
+    #weeks .wk{border:1px solid var(--line);background:#fbfcfb;border-radius:10px;padding:10px 6px 8px;text-align:center;font-weight:750;font-size:11px;cursor:pointer}
+    #weeks .wk small{display:block;font-weight:400;font-size:9px;color:var(--muted);margin-top:3px}
+    #weeks .wk.done{background:var(--green-soft);border-color:#9bd5ad;color:var(--green-dark)}
+    #weeks .wk.active{background:var(--green);border-color:var(--green);color:#fff}
+    #weeks .wk.review{background:var(--amber-soft);border-color:#f0d9a8;color:#8a6416}
+    .hint{color:var(--muted);font-size:10px;margin-top:6px}
+    /* Реальные поля формы (ползунки, ввод, чекбоксы, радио) */
+    #questions .q{margin:12px 0}
+    #questions .q>.label{font-weight:650;font-size:11px;display:block;margin-bottom:6px}
+    #questions .slider-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+    #questions .slider-val{font-weight:800;color:var(--green-dark);font-size:13px;min-width:60px;text-align:right}
+    input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0}
+    input[type="range"]::-webkit-slider-runnable-track{height:8px;border-radius:6px;background:#e6ecef}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:var(--green);border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);margin-top:-11px}
+    input[type="range"]::-moz-range-track{height:8px;border-radius:6px;background:#e6ecef}
+    input[type="range"]::-moz-range-thumb{width:26px;height:26px;border:4px solid #fff;border-radius:50%;background:var(--green)}
+    input[type="text"],input[type="number"],select,textarea{width:100%;padding:10px;border:1px solid var(--line-strong);border-radius:10px;font-size:13px;background:#fff;color:var(--ink);font-family:inherit}
+    textarea{min-height:92px;resize:vertical}
+    textarea.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;background:#0f172a;color:#e2e8f0;border-color:#1e293b}
+    .opt,.chk{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:5px 0;background:#fff;font-size:11px}
+    .opt input,.chk input{width:20px;height:20px;accent-color:var(--green);flex:none}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .ai-block{margin:10px 0}
+    .ai-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:11px;font-weight:700}
+    .mini-btn{height:44px;padding:0 12px;border-radius:9px;border:1px solid var(--line-strong);background:#fff;color:#435149;font-size:11px;font-weight:750}
+    .mini-btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+    .mini-btn.ai{background:#0c5930;color:#fff;border-color:#0c5930}
+    .file-btn{display:inline-flex;align-items:center;height:44px;padding:0 12px;border-radius:9px;border:1px solid var(--line-strong);background:#fff;font-size:11px;font-weight:750}
+    .zone-table{width:100%;min-width:640px;border-collapse:collapse;font-size:10px}
+    .zone-table th{text-align:left;padding:6px 4px;border-bottom:2px solid var(--line);font-size:10px;color:var(--muted)}
+    .zone-table .z-in{width:70px;height:44px;padding:0 6px;border:1px solid var(--line-strong);border-radius:8px;font-size:11px}
+    /* Нижняя панель управления (реальные кнопки приложения) */
+    .sticky{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(244,246,245,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;gap:8px;z-index:30}
+    .sticky button{flex:1;height:52px;border:0;border-radius:12px;font-size:12px;font-weight:750;color:#fff;background:var(--green)}
+    .sticky button.secondary{background:#fff;color:var(--ink);border:1px solid var(--line-strong);flex:0 0 22%}
+    .sticky button.ai{background:#0c5930;flex:0 0 28%}
+    .content{padding-bottom:96px}
+  </style>
+</head>
+<body>
+<div id="ytWrap"><div id="ytBar"></div></div>
+<div class="app">
+  <div class="mobile-scrim" id="scrim" aria-hidden="true"></div>
+  <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
+    <a class="brand" href="#top" aria-label="DarkStore — главная">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 2.8 36 11.5v17L20 37.2 4 28.5v-17L20 2.8Z" stroke="currentColor" stroke-width="2.2"/><path d="m4.8 11.8 15.2 8.7 15.2-8.7M20 20.5v16M12.3 7.1l15.5 8.8v8.4" stroke="currentColor" stroke-width="2"/></svg>
+      <span><span class="brand-name">DarkStore</span><span class="brand-sub">Analytics Workspace</span></span>
+    </a>
+    <nav class="nav">
+      <a class="active" href="#top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Главная</a>
+      <a href="#forms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l5 5v13H7zM15 3v5h5M10 13h7M10 17h7"/></svg>Операционные формы</a>
+      <a href="#analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V12M10 20V5M16 20V9M22 20V2"/></svg>Аналитика</a>
+      <a href="#matrix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Матрица метрик</a>
+      <a href="#ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2ZM19 16l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></svg>AI Workflow</a>
+      <a href="#benchmarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H4v3a4 4 0 0 0 4 4M16 6h4v3a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg>Бенчмарки</a>
+      <a href="#project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h7l2 2h9v11H3z"/></svg>Проект</a>
+    </nav>
+    <div class="nav-label">Текущий проект</div>
+    <div class="project-mini"><div class="project-icon">▣</div><div><strong>DarkStore Q1–Q2</strong><small><span class="live-dot"></span>Активен</small></div></div>
+    <div class="sidebar-bottom"><a href="#project"><span>⚙</span>Настройки</a><a href="#help"><span>ⓘ</span>Справка</a></div>
+  </aside>
+  <main class="main" id="top">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;min-width:0"><button class="mobile-menu" id="menuBtn" aria-label="Открыть меню" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button><div class="top-title"><h1>Главная панель</h1><p>Аналитика, результативность и управление проектом даркстора</p></div></div>
+      <div class="top-actions"><button class="cycle-select" type="button"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span><strong>6 недель (текущий цикл)</strong><small>Неделя <span id="promptWeek">1</span> из 6</small></span><span>⌄</span></button><button class="icon-button" aria-label="Уведомления">♧<i class="notify-dot"></i></button><div class="avatar" aria-label="Профиль">DS</div></div>
+    </header>
+    <div class="content">
+
+      <!-- Реальный баннер миграции проекта: показывается скриптом приложения (updateMigrationNotice) -->
+      <div class="card card-pad app-notice" id="migrationNotice" style="display:none">
+        <div class="card-head"><h2 class="card-title">Проект обновлён</h2></div>
+        <div class="hint" id="migrationText"></div>
+        <div class="ai-actions"><button type="button" class="mini-btn primary" id="migrationOkBtn">Понятно, перейти к проверке недель</button></div>
+      </div>
+
+      <!-- РЯД 1: живая легенда приложения + недели -->
+      <section class="grid overview-row" aria-label="Обзор проекта">
+        <article class="card card-pad">
+          <div class="card-head"><h2 class="card-title">Обзор оценки и прибыли <span class="info" title="Живая легенда приложения: заполняется на каждом вводе">i</span></h2></div>
+          <!-- Реальный #liveLegend: содержимое заполняет updateLiveBar() -->
+          <div id="liveLegend">
+            <div class="row1">
+              <span class="status low" id="liveStatus">Оценка: недостаточно данных</span>
+              <span class="score" id="liveScore">0 / 100</span>
+            </div>
+            <div class="breakdown" id="liveBreakdown"></div>
+            <div class="contrib" id="liveContrib"></div>
+          </div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> В макете блок пуст: в приложении он считается из введённых полей (полнота, качество данных, топ-5 вкладов).</div>
+        </article>
+        <article class="card card-pad">
+          <div class="card-head"><h2 class="card-title">Шесть недель <span class="muted" style="font-weight:500">(анализ цикла)</span></h2><span class="demo-badge">DEMO</span></div>
+          <!-- Реальный #weeks: renderWeeks() заменяет содержимое на .wk -->
+          <div class="weeks" id="weeks">
+            <button class="week" type="button"><strong>Нед. 1</strong><small>DEMO</small><b>4,41</b><i class="week-dot"></i></button>
+            <button class="week" type="button"><strong>Нед. 2</strong><small>DEMO</small><b>4,55</b><i class="week-dot"></i></button>
+            <button class="week" type="button"><strong>Нед. 3</strong><small>DEMO</small><b>4,63</b><i class="week-dot"></i></button>
+            <button class="week" type="button"><strong>Нед. 4</strong><small>DEMO</small><b>4,70</b><i class="week-dot"></i></button>
+            <button class="week" type="button"><strong>Нед. 5</strong><small>DEMO</small><b>4,75</b><i class="week-dot"></i></button>
+            <button class="week selected" type="button" aria-pressed="true"><strong>Нед. 6</strong><small>DEMO</small><b>4,72</b><i class="week-dot"></i></button>
+          </div>
+          <!-- Реальная подпись недели -->
+          <div class="hint" id="weekHint">Неделя 1: Диагностика, калибровка модели, тарифы по Зисам, метрики.</div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> Плитки выше — демонстрационные. В приложении #weeks заполняется из состояния: «заполнена / n/m / проверить».</div>
+        </article>
+      </section>
+
+      <!-- РЯД 2: реальная форма опросника + реальные графики -->
+      <section class="grid middle-row section-gap">
+        <article class="card card-pad" id="forms">
+          <div class="card-head"><h2 class="card-title">Операционные формы <span class="muted" style="font-weight:500">(неделя цикла)</span> <span class="info" title="Реальная форма приложения">i</span></h2><span class="demo-badge">DEMO</span></div>
+          <div class="operations" aria-label="Разделы формы (демонстрационная навигация)">
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 2 9 5v10l-9 5-9-5V7zM3.5 7.3 12 12l8.5-4.7M12 12v10"/></svg><span><strong>Калибровка модели</strong><p>DEMO: Зисы, чек, маржа, ставка, веса</p><span class="count">12 полей</span></span></a>
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span><strong>Метрики недели</strong><p>DEMO: опоздания, обращения, ТМЦ, выходы</p><span class="count">6 полей</span></span></a>
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h11v11H3zM14 11h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg><span><strong>Тарифы по Зисам</strong><p>DEMO: км, заказы, ходка, возврат, ставка</p><span class="count">до 10+</span></span></a>
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3h8M9 3v4l-5 5v8h16v-8l-5-5V3M7 14h10M10 17h4"/></svg><span><strong>Куратор</strong><p>DEMO: процессы, автономность, KPI, обучение</p><span class="count">5 полей</span></span></a>
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20v-1a7 7 0 0 1 14 0v1M16 5a3 3 0 0 1 0 6M18 14a6 6 0 0 1 4 5v1"/></svg><span><strong>Слоты и выходы</strong><p>DEMO: слоты, комментарий куратора</p><span class="count">3 поля</span></span></a>
+            <a class="op" href="#forms"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.6.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.6-.9l-1.7.6-1.4-2.4 1.4-1.1a8 8 0 0 1 0-1.9l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.6-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.6.9l1.7-.6 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 1.8Z"/></svg><span><strong>Причины и планы</strong><p>DEMO: что мешает, план по неделе</p><span class="count">условно</span></span></a>
+          </div>
+          <!-- Реальная форма: renderQuestions() наполняет #questions -->
+          <form id="survey">
+            <div id="questions">
+              <div class="q"><span class="label">DEMO: пример поля недели — опоздания, %</span>
+                <div class="slider-head"><span class="muted" style="font-size:10px">Цель 5–7%</span><span class="slider-val">7</span></div>
+                <input type="range" min="0" max="30" step="0.5" value="7" aria-label="DEMO: опоздания, %">
+              </div>
+              <div class="grid2">
+                <div class="q"><span class="label">DEMO: средний чек, ₽</span><input type="text" value="1 050" aria-label="DEMO: средний чек"></div>
+                <div class="q"><span class="label">DEMO: ставка курьеру, ₽</span><input type="text" value="110" aria-label="DEMO: ставка курьеру"></div>
+              </div>
+              <div class="q"><span class="label">DEMO: выходы по слотам, %</span><input type="range" min="0" max="100" step="1" value="95" aria-label="DEMO: выходы по слотам"></div>
+              <div class="demo-note"><span class="demo-badge">DEMO</span> Поля выше — образец. В приложении весь блок #questions собирает renderQuestions(): слайдеры, радио, чек-боксы, таблица Зисов (#zoneTableWrap), блок прибыли (#profitBlock), кнопка «Подтвердить показанные значения».</div>
+            </div>
+          </form>
+        </article>
+        <article class="card card-pad" id="analytics">
+          <div class="card-head"><h2 class="card-title">Прибыли и потери <span class="info" title="Реальный контейнер графиков приложения">i</span></h2><span class="demo-badge">DEMO</span></div>
+          <div class="chart-legend"><span><i class="legend-dot" style="background:#79d88c"></i>Прибыль</span><span><i class="legend-dot" style="background:#f4a6b0"></i>Потери</span><span><i class="legend-dot" style="background:#155b36"></i>Чистая прибыль</span></div>
+          <!-- Реальный #charts: renderCharts() рисует 4 SVG (включая матрицу метрик) -->
+          <div class="chart-wrap" id="charts">
+            <span class="demo-badge">DEMO</span>
+            <svg viewBox="0 0 560 188" role="img" aria-label="DEMO: график прибыли и потерь за шесть недель">
+              <g class="chart-grid"><path d="M55 20H550M55 55H550M55 90H550M55 125H550M55 160H550"/></g>
+              <g class="chart-label"><text x="4" y="23">4,0 млн ₽</text><text x="4" y="58">3,0 млн ₽</text><text x="4" y="93">2,0 млн ₽</text><text x="4" y="128">1,0 млн ₽</text><text x="37" y="163">0 ₽</text><text x="0" y="184">−1,0 млн ₽</text></g>
+              <g><rect class="chart-bar" x="72" y="91" width="43" height="69" rx="2"/><rect class="chart-loss" x="72" y="160" width="43" height="14" rx="2"/><rect class="chart-bar" x="145" y="82" width="43" height="78" rx="2"/><rect class="chart-loss" x="145" y="160" width="43" height="13" rx="2"/><rect class="chart-bar" x="218" y="71" width="43" height="89" rx="2"/><rect class="chart-loss" x="218" y="160" width="43" height="14" rx="2"/><rect class="chart-bar" x="291" y="61" width="43" height="99" rx="2"/><rect class="chart-loss" x="291" y="160" width="43" height="14" rx="2"/><rect class="chart-bar" x="364" y="47" width="43" height="113" rx="2"/><rect class="chart-loss" x="364" y="160" width="43" height="14" rx="2"/><rect class="chart-bar" x="437" y="33" width="43" height="127" rx="2"/><rect class="chart-loss" x="437" y="160" width="43" height="13" rx="2"/></g>
+              <path class="chart-line" d="M93 137 166 132 239 124 312 112 385 106 458 96"/>
+              <g><circle class="chart-point" cx="93" cy="137" r="4"/><circle class="chart-point" cx="166" cy="132" r="4"/><circle class="chart-point" cx="239" cy="124" r="4"/><circle class="chart-point" cx="312" cy="112" r="4"/><circle class="chart-point" cx="385" cy="106" r="4"/><circle class="chart-point" cx="458" cy="96" r="4"/></g>
+              <g class="chart-label"><text x="80" y="184">Нед. 1</text><text x="153" y="184">Нед. 2</text><text x="226" y="184">Нед. 3</text><text x="299" y="184">Нед. 4</text><text x="372" y="184">Нед. 5</text><text x="445" y="184">Нед. 6</text></g>
+            </svg>
+          </div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> График выше — образец. В приложении #charts строит четыре блока: прибыль по неделям, метрики с коридором цели, стек потерь и матрицу «метрика × неделя», плюс факт-слой по заголовку.</div>
+        </article>
+      </section>
+
+      <!-- РЯД 3: матрица (образец) + реальная сводка и отчёт -->
+      <section class="grid matrix-row section-gap">
+        <article class="card card-pad" id="matrix">
+          <div class="card-head"><h2 class="card-title">Матрица метрик <span class="info" title="В приложении матрица рендерится внутри #charts">i</span></h2><span class="demo-badge">DEMO</span></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Направление</th><th>Ключевые метрики</th><th>Нед. 1</th><th>Нед. 2</th><th>Нед. 3</th><th>Нед. 4</th><th>Нед. 5</th><th>Нед. 6</th><th>Δ (6 нед.)</th></tr></thead>
+            <tbody>
+              <tr><td class="metric-name">◇ Опоздания</td><td>Опоздания, % (цель ≤7)</td><td class="metric-value">16,5</td><td class="metric-value">18,0</td><td class="metric-value">11,5</td><td class="metric-value">6,5</td><td class="metric-value">5,5</td><td class="metric-value"><span class="good-cell">6,0</span></td><td class="up">↓ −10,5 п.п.</td></tr>
+              <tr><td class="metric-name">▱ Обращения</td><td>Обращения, % (цель ≤5)</td><td class="metric-value">15,5</td><td class="metric-value">30,0</td><td class="metric-value">9,0</td><td class="metric-value">7,5</td><td class="metric-value">4,0</td><td class="metric-value"><span class="good-cell">4,5</span></td><td class="up">↓ −11,0 п.п.</td></tr>
+              <tr><td class="metric-name">▰ ТМЦ</td><td>Обеспеченность, % (цель 100)</td><td class="metric-value">32</td><td class="metric-value">76</td><td class="metric-value">88</td><td class="metric-value">90</td><td class="metric-value">86</td><td class="metric-value"><span class="good-cell">100</span></td><td class="up">↑ +68 п.п.</td></tr>
+              <tr><td class="metric-name">☆ Выходы</td><td>Выход по слотам, % (цель ≥95)</td><td class="metric-value">49</td><td class="metric-value">76</td><td class="metric-value">97</td><td class="metric-value">80</td><td class="metric-value">100</td><td class="metric-value"><span class="good-cell">100</span></td><td class="up">↑ +51 п.п.</td></tr>
+              <tr><td class="metric-name">♧ Куратор</td><td>Индекс готовности, % (порог 57)</td><td class="metric-value">39,9</td><td class="metric-value">47,4</td><td class="metric-value">39,9</td><td class="metric-value">39,9</td><td class="metric-value">86,5</td><td class="metric-value"><span class="good-cell">88,6</span></td><td class="up">↑ +48,7 п.п.</td></tr>
+            </tbody>
+          </table></div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> Значения — демонстрационные. В приложении матрица «метрика × неделя» рисуется внутри #charts (statusMatrix), отдельного контейнера у неё нет.</div>
+        </article>
+        <article class="card card-pad">
+          <div class="card-head"><h2 class="card-title"><span style="color:var(--green)">▥</span> Сводка результатов</h2><span class="demo-badge">DEMO</span></div>
+          <div class="hint">Реальная сводка приложения (обновляется автоматически, тап — копирование):</div>
+          <!-- Реальный #result: updateResult() пишет текст -->
+          <textarea id="result" readonly placeholder="DEMO: здесь появится текстовая сводка результата (недели, прибыль, экономика заказа)"></textarea>
+          <div class="hint" style="margin-top:10px">Реальный отчёт для анализа ИИ (структурированный текст):</div>
+          <!-- Реальный #aiReport: updateAiReport() пишет текст -->
+          <textarea id="aiReport" readonly placeholder="DEMO: здесь появится отчёт для ИИ (калибровка, метрики, причины, риски)"></textarea>
+        </article>
+      </section>
+
+      <!-- РЯД 4: реальный AI Workflow + бенчмарки + проект -->
+      <section class="grid bottom-row section-gap">
+        <article class="card card-pad" id="ai">
+          <div class="card-head"><h2 class="card-title"><span style="color:var(--green)">✧</span> AI Workflow <span class="info" title="Реальный цикл: промпт → JSON → оценка → финальный отчёт">i</span></h2></div>
+          <div class="workflow">
+            <div class="workflow-step"><span class="step-number done">1</span><span class="step-copy"><strong>Промпт недели</strong><small>Задача для ИИ по схеме strategy/2</small></span><button class="mini-button" type="button" id="copyPromptBtn">Копировать</button></div>
+            <div class="ai-block">
+              <textarea class="mono" id="promptOut" readonly placeholder="DEMO: здесь появится промпт недели (buildPrompt)"></textarea>
+            </div>
+            <div class="workflow-step"><span class="step-number done">2</span><span class="step-copy"><strong>JSON плана</strong><small>Ответ ИИ: actions, expected, week_plan</small></span><button class="mini-button" type="button" id="applyAiBtn">Проверить и применить</button></div>
+            <div class="ai-block">
+              <textarea id="aiJsonIn" placeholder='{"strategy_name": "…", "actions": [...], "expected": {...}, ...}'></textarea>
+              <div class="hint" id="aiApplyStatus">Ожидание ответа ИИ.</div>
+            </div>
+            <div class="workflow-step"><span class="step-number">3</span><span class="step-copy"><strong>Evaluation / 2</strong><small>Проверка оценки ИИ-оценщика</small></span><button class="mini-button" type="button" id="checkEvalBtn">Проверить оценку</button></div>
+            <div class="ai-block">
+              <textarea id="evalJsonIn" placeholder='{"schema_version": "evaluation/2", "verdict": "…", "mape_pct": null, "mape_status": "not_applicable_no_ai_runs", "risk_score": 0.8, "risk_scale": "0-1", "confidence_in_verdict": 0.6, "gaps_ranked": [...], "top_effect_action": "…", "next_3_weeks": [...]}'></textarea>
+              <div class="hint" id="evalStatus">Вставьте ответ ИИ по финальному отчёту (раздел 7) — проверка схемы evaluation/2.</div>
+            </div>
+            <div class="workflow-step step-current"><span class="step-number">4</span><span class="step-copy"><strong>Финальный отчёт</strong><small>Итоговый отчёт и JSON-сводка для оценки</small></span><button class="mini-button" type="button" id="finalBtn" style="background:#0c5930;color:white;border-color:#0c5930">Собрать</button></div>
+            <div class="ai-block" id="finalBlock" style="display:none">
+              <div class="ai-head"><b>Финальный отчёт для оценки в ИИ</b><button type="button" class="mini-btn" id="copyFinalBtn">Копировать</button></div>
+              <textarea class="mono" id="finalOut" readonly></textarea>
+            </div>
+            <div class="ai-actions">
+              <button type="button" class="mini-btn" id="exportBtn">Экспорт JSON</button>
+              <label class="file-btn">Загрузить проект<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+              <button type="button" class="mini-btn" id="benchmarkOpenBtn">Бенчмарки рынка</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-pad" id="benchmarks">
+          <div class="card-head"><h2 class="card-title"><span style="color:var(--green)">♜</span> Бенчмарки <span class="info" title="Реальная карточка бенчмарков рынка">i</span></h2></div>
+          <!-- Реальная карточка бенчмарков: показ и заполнение управляются renderBenchmarkCard() -->
+          <div class="card-pad" id="benchmarkCard" style="display:none;border:1px solid var(--line);border-radius:12px;margin-bottom:10px">
+            <div class="card-head"><h2 class="card-title">Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2></div>
+            <div class="hint">Укажите рыночные значения и источник с датой. Без источника бенчмарк не принимается.</div>
+            <div id="benchmarkForm"></div>
+            <div class="hint" id="benchmarkStatus"></div>
+            <div class="ai-actions">
+              <button type="button" class="mini-btn primary" id="benchmarkSaveBtn">Сохранить бенчмарки</button>
+              <button type="button" class="mini-btn" id="benchmarkSkipBtn">Нет данных — без бенчмарков</button>
+              <button type="button" class="mini-btn" id="benchmarkEditBtn">Изменить</button>
+            </div>
+            <div id="benchmarkSummary" class="hint"></div>
+          </div>
+          <div class="table-wrap"><table class="benchmark-table">
+            <thead><tr><th>Метрика</th><th>Наш даркстор</th><th>Бенчмарк</th><th>Отклонение</th></tr></thead>
+            <tbody>
+              <tr><td>Маржа, % от чека <span class="demo-badge">DEMO</span></td><td><span class="ours">13,0%</span></td><td>12,0%</td><td class="up">↑ +1,0 п.п.</td></tr>
+              <tr><td>Средний чек, ₽ <span class="demo-badge">DEMO</span></td><td><span class="ours">1 050</span></td><td>1 200</td><td class="up">↓ −150</td></tr>
+              <tr><td>Ставка курьеру, ₽ <span class="demo-badge">DEMO</span></td><td><span class="ours">110</span></td><td>90</td><td class="up">↓ +20</td></tr>
+              <tr><td>Опоздания, % <span class="demo-badge">DEMO</span></td><td><span class="ours">30,0%</span></td><td>8,0%</td><td class="up">↓ −22,0 п.п.</td></tr>
+            </tbody>
+          </table></div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> Таблица — образец. В приложении бенчмарки вводит пользователь: значение, источник, дата (иначе не принимаются).</div>
+        </article>
+
+        <article class="card card-pad project-card" id="project">
+          <div class="card-head"><h2 class="card-title"><span style="color:var(--green)">▱</span> Управление проектом <span class="info">i</span></h2><span class="demo-badge">DEMO</span></div>
+          <div class="project-box">
+            <div class="project-top"><strong>DarkStore Q1–Q2</strong><span class="status">Активен</span><button class="icon-button" aria-label="Дополнительные действия">⋮</button></div>
+            <div class="project-meta"><span>▣ DEMO: период 13 янв – 23 фев (6 недель)</span><span>◎ DEMO: цель — рост оценки ≥ 4,70 и прибыли ≥ +10%</span><span>◎ DEMO: Superset-снапшот и экспорт проекта — в нижней панели</span></div>
+            <div class="progress-head"><span>Выполнение целей</span><strong>DEMO 92%</strong></div>
+            <div class="progress"><span></span></div>
+            <div class="project-actions"><button class="action-button" type="button">⚙ Параметры проекта</button><button class="action-button" type="button">☷ Управлять</button></div>
+          </div>
+          <div class="demo-note"><span class="demo-badge">DEMO</span> Блок декоративный: в приложении роль «управления» выполняют нижняя панель (недели, сброс, Superset, копирование отчёта) и кнопки экспорта/импорта в AI Workflow.</div>
+        </article>
+      </section>
+
+      <p class="footnote">HTML-эталон v1.1 · Все показатели, отмеченные <span class="demo-badge">DEMO</span>, демонстрационные · Реальные элементы приложения сохранены и помечены в compatibility-report.md</p>
+    </div>
+  </main>
+</div>
+
+<!-- Реальная нижняя панель управления приложения -->
+<div class="sticky">
+  <button type="button" class="secondary" id="dsSupersetBtn" style="background:#149447;color:#fff;border-color:#149447">Superset</button>
+  <button type="button" class="secondary" id="resetBtn">Сброс</button>
+  <button type="button" class="secondary" id="prevBtn">←</button>
+  <button type="button" id="nextBtn">Далее →</button>
+  <button type="button" class="ai" id="copyAiBtn">Отчёт ИИ</button>
+</div>
+
+<script>
+  // Демонстрационные взаимодействия эталона (не подключены к данным проекта).
+  // Скрипт приложения в эталон не включён: это макет.
+  const menuBtn=document.getElementById('menuBtn');
+  const sidebar=document.getElementById('sidebar');
+  const scrim=document.getElementById('scrim');
+  function closeMenu(){sidebar.classList.remove('open');scrim.classList.remove('show');menuBtn&&menuBtn.setAttribute('aria-expanded','false')}
+  menuBtn&&menuBtn.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');scrim.classList.toggle('show',open);menuBtn.setAttribute('aria-expanded',String(open))});
+  scrim&&scrim.addEventListener('click',closeMenu);
+  sidebar.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{sidebar.querySelectorAll('.nav a').forEach(x=>x.classList.remove('active'));if(a.closest('.nav'))a.classList.add('active');closeMenu()}));
+  document.querySelectorAll('#weeks .week').forEach((button)=>button.addEventListener('click',()=>{document.querySelectorAll('#weeks .week').forEach(x=>{x.classList.remove('selected');x.setAttribute('aria-pressed','false')});button.classList.add('selected');button.setAttribute('aria-pressed','true')}));
+</script>
+</body>
+</html>

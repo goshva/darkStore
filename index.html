@@ -6,248 +6,473 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Даркстор: прибыль, влияние полей и отчёт для ИИ</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --ink:#1d2430; --muted:#667085; --acc:#0b8a4b; --acc2:#0a6b3b; --warn:#b42318; --info:#175cd3; --good:#0b8a4b; }
+  /* ===================== ТОКЕНЫ ДИЗАЙНА (v1.1) ===================== */
+  :root{
+    /* имена сохранены для совместимости со скриптом (var(--acc), var(--warn), ...) */
+    --bg:#f4f6f5; --card:#fff; --line:#e4eae6; --ink:#18221e; --muted:#69766f;
+    --acc:#149447; --acc2:#087638; --warn:#b42318; --info:#175cd3; --good:#149447;
+    /* палитра дизайн-системы */
+    --surface:#fff; --surface-soft:#f8faf9; --line-strong:#d7e0da;
+    --green:#149447; --green-dark:#087638; --green-soft:#e8f7ed; --green-pale:#f2fbf5;
+    --red:#e56c7b; --red-soft:#fff0f1; --amber:#d79b2d; --amber-soft:#fff7e7;
+    --nav:#111a18; --nav-text:#d7e0db; --shadow:0 8px 26px rgba(26,48,36,.045);
+    --radius:15px; --radius-sm:10px; --sidebar:246px;
+  }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-size:16px; }
-  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.35; padding:20px 12px 170px; }
-  h1 { font-size:20px; margin:4px 0 6px; }
-  h2 { font-size:16px; margin:0 0 10px; }
-  .sub { color:var(--muted); font-size:13px; margin-bottom:12px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; }
-  .weeks { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:10px 0 4px; }
-  .wk { padding:10px 4px; border-radius:10px; border:1px solid var(--line); background:#fff; text-align:center; font-weight:700; font-size:14px; }
-  .wk.done { background:#effaf4; border-color:var(--acc); color:var(--acc2); }
-  .wk.review { background:#fff7e6; border-color:#f79009; color:#b54708; }
-  .wk.active { background:var(--acc); border-color:var(--acc); color:#fff; }
-  .wk small { display:block; font-weight:400; font-size:12px; opacity:.8; }
+  html { scroll-behavior:smooth; scroll-padding-top:88px; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); }
+  body { font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; font-size:14px; line-height:1.45; padding-bottom:96px; }
+  h1 { font-size:22px; letter-spacing:-.6px; margin:0; font-weight:780; }
+  h2 { font-size:16px; font-weight:760; letter-spacing:-.25px; margin:0 0 10px; }
+  .sub { color:var(--muted); font-size:12px; margin:2px 0 0; }
+  button { font:inherit; cursor:pointer; }
+  a { color:inherit; text-decoration:none; }
+
+  /* ===================== КАРКАС: сайдбар, топбар, сетка ===================== */
+  .app { min-height:100vh; }
+  .sidebar { position:fixed; inset:0 auto 0 0; width:var(--sidebar); background:linear-gradient(180deg,var(--nav),#151e1b); color:var(--nav-text); padding:22px 14px 16px; display:flex; flex-direction:column; z-index:20; }
+  .brand { display:flex; align-items:center; gap:12px; padding:0 8px 28px; }
+  .brand-mark { width:36px; height:36px; color:#20b45a; flex:none; }
+  .brand-name { font-size:19px; font-weight:800; letter-spacing:-.5px; color:#fff; display:block; }
+  .brand-sub { font-size:12px; color:#91a099; letter-spacing:.35px; display:block; margin-top:1px; }
+  .nav { display:grid; gap:5px; }
+  .nav a { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:10px; color:#c8d2cc; font-weight:600; font-size:13px; transition:.18s; }
+  .nav a:hover { background:#26342e; color:#fff; }
+  .nav a.active { background:#138e43; color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); }
+  .nav svg { width:18px; height:18px; flex:none; }
+  .nav-label { font-size:12px; color:#78877f; text-transform:uppercase; letter-spacing:1px; padding:23px 10px 8px; }
+  .project-mini { background:#202c27; border:1px solid #2c3b34; border-radius:12px; padding:11px; display:flex; gap:10px; align-items:center; }
+  .project-icon { width:34px; height:34px; border-radius:9px; background:#29463a; display:grid; place-items:center; color:#75d69a; flex:none; }
+  .project-mini strong { display:block; color:#fff; font-size:13px; }
+  .project-mini small { color:#9fb0a6; font-size:12px; }
+  .live-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#25c35d; margin-right:5px; }
+  .sidebar-bottom { margin-top:auto; border-top:1px solid #2b3832; padding-top:12px; }
+  .sidebar-bottom a { display:flex; align-items:center; gap:12px; padding:10px 12px; color:#c8d2cc; border-radius:9px; font-size:13px; }
+  .sidebar-bottom a:hover { background:#26342e; }
+  .main { margin-left:var(--sidebar); min-height:100vh; }
+  .topbar { min-height:76px; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 30px; position:sticky; top:0; z-index:10; backdrop-filter:blur(12px); }
+  .top-title { min-width:0; }
+  .top-title h1 { font-size:22px; }
+  .top-actions { display:flex; align-items:center; gap:18px; flex:none; }
+  .cycle-select { display:flex; align-items:center; gap:10px; border:1px solid var(--line-strong); border-radius:10px; background:#fff; padding:8px 12px; min-height:44px; min-width:230px; text-align:left; color:var(--ink); }
+  .cycle-select small { display:block; color:var(--muted); font-size:12px; }
+  .cycle-select strong { font-size:13px; }
+  .icon-button { border:0; background:transparent; color:#59675f; padding:7px; position:relative; }
+  .avatar { width:34px; height:34px; border-radius:50%; background:#e7ece9; color:#425048; font-weight:750; display:grid; place-items:center; font-size:12px; }
+  .mobile-menu { display:none; min-height:44px; min-width:44px; }
+  .mobile-scrim { display:none; }
+  .content { max-width:1600px; margin:0 auto; padding:20px 22px 34px; }
+  .grid { display:grid; gap:14px; }
+  .overview-row { grid-template-columns:1fr 1.16fr; }
+  .middle-row { grid-template-columns:1.12fr 1fr; }
+  .matrix-row { grid-template-columns:1.58fr .92fr; }
+  .bottom-row { grid-template-columns:1.15fr 1.16fr 1.05fr; }
+  .section-gap { margin-top:14px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); min-width:0; padding:14px 15px; margin:0; }
+  .card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:11px; }
+  .card-title { font-size:16px; font-weight:760; letter-spacing:-.25px; margin:0; display:flex; align-items:center; gap:8px; }
+  .info { width:16px; height:16px; border:1.5px solid #87958d; color:#75847b; border-radius:50%; font-size:11px; display:inline-grid; place-items:center; font-weight:700; }
+  .footnote { font-size:12px; color:#89958e; text-align:right; margin:12px 2px 0; }
+
+  /* ===================== НЕДЕЛИ ===================== */
+  .weeks { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; margin:2px 0 4px; }
+  .wk { border:1px solid var(--line); background:#fbfcfb; border-radius:10px; padding:10px 6px 8px; text-align:center; font-weight:750; font-size:13px; cursor:pointer; min-width:0; transition:.15s; }
+  .wk:hover { border-color:#9bd5ad; }
+  .wk small { display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:3px; }
+  .wk.done { background:var(--green-soft); border-color:#9bd5ad; color:var(--green-dark); }
+  .wk.review { background:var(--amber-soft); border-color:#f0d9a8; color:#8a6416; }
+  .wk.active { background:var(--green); border-color:var(--green); color:#fff; }
+  .wk.active small { color:#e8f7ed; }
+  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+
+  /* ===================== ФОРМА ===================== */
+  #questions > .card { border:0; box-shadow:none; padding:0; margin:0 0 16px; background:transparent; border-radius:0; }
+  #questions > .card > h2 { font-size:14px; font-weight:760; color:var(--ink); margin:0 0 10px; padding-bottom:7px; border-bottom:1px solid var(--line); }
+  #questions > .card:last-child { margin-bottom:0; }
   .q { margin:14px 0; }
   .q:first-child { margin-top:0; }
-  .q > .label { font-weight:600; margin-bottom:8px; display:block; }
-  .hint { color:var(--muted); font-size:13px; margin-top:4px; }
-  .delta { font-size:13px; margin-top:4px; font-weight:600; }
+  .q > .label { font-weight:650; margin-bottom:8px; display:block; font-size:13px; }
+  .delta { font-size:12px; margin-top:4px; font-weight:650; }
   .delta.up { color:var(--warn); }
   .delta.down { color:var(--acc2); }
   .delta.flat { color:var(--muted); }
-  .opt { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; background:#fff; }
+  .opt { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; background:#fff; font-size:13px; }
   .opt input { width:22px; height:22px; accent-color:var(--acc); flex:0 0 auto; }
-  .opt:has(input:checked) { border-color:var(--acc); background:#effaf4; }
-  .opt:has(input:focus) { box-shadow:0 0 0 3px #0b8a4b22; }
-  .chk { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; }
+  .opt:has(input:checked) { border-color:var(--acc); background:var(--green-pale); }
+  .opt:has(input:focus) { box-shadow:0 0 0 3px rgba(20,148,71,.14); }
+  .chk { display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin:6px 0; font-size:13px; }
   .chk input { width:22px; height:22px; accent-color:var(--acc); }
-  .chk:has(input:checked) { border-color:var(--acc); background:#effaf4; }
-  .chk:has(input:focus) { box-shadow:0 0 0 3px #0b8a4b22; }
+  .chk:has(input:checked) { border-color:var(--acc); background:var(--green-pale); }
+  .chk:has(input:focus) { box-shadow:0 0 0 3px rgba(20,148,71,.14); }
   input[type="text"],input[type="number"],input[type="date"],select,textarea {
-    width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; font-size:16px; background:#fff; color:var(--ink);
+    width:100%; padding:12px; border:1px solid var(--line-strong); border-radius:10px; font-size:14px; background:#fff; color:var(--ink); font-family:inherit;
   }
-  input[type="text"]:focus,textarea:focus,select:focus { outline:2px solid #0b8a4b33; }
+  input[type="text"]:focus,textarea:focus,select:focus { outline:2px solid rgba(20,148,71,.28); border-color:var(--acc); }
   textarea { min-height:84px; resize:vertical; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  @media (max-width:420px){ .grid2 { grid-template-columns:1fr; } }
   .slider-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
-  .slider-val { font-weight:700; color:var(--acc2); font-size:18px; min-width:74px; text-align:right; }
+  .slider-val { font-weight:800; color:var(--green-dark); font-size:16px; min-width:74px; text-align:right; }
   input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:44px; background:transparent; margin:0; padding:0; }
-  input[type="range"]::-webkit-slider-runnable-track { height:10px; border-radius:6px; background:#e6ecef; }
-  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px; border-radius:50%; background:var(--acc); border:4px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.25); margin-top:-12px; }
-  input[type="range"]::-moz-range-track { height:10px; border-radius:6px; background:#e6ecef; }
-  input[type="range"]::-moz-range-thumb { width:30px; height:30px; border:4px solid #fff; border-radius:50%; background:var(--acc); box-shadow:0 2px 8px rgba(0,0,0,.25); }
-  input[type="range"]:focus { outline:2px solid #0b8a4b33; border-radius:8px; }
-  .adaptive { display:none; margin-top:10px; padding:12px; border-left:4px solid var(--warn); background:#fff5f4; border-radius:10px; }
+  input[type="range"]::-webkit-slider-runnable-track { height:9px; border-radius:6px; background:#e6ecef; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:30px; height:30px; border-radius:50%; background:var(--green); border:4px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.22); margin-top:-11px; }
+  input[type="range"]::-moz-range-track { height:9px; border-radius:6px; background:#e6ecef; }
+  input[type="range"]::-moz-range-thumb { width:28px; height:28px; border:4px solid #fff; border-radius:50%; background:var(--green); box-shadow:0 2px 8px rgba(0,0,0,.22); }
+  input[type="range"]:focus { outline:2px solid rgba(20,148,71,.28); border-radius:8px; }
+  .adaptive { display:none; margin-top:10px; padding:12px; border-left:4px solid var(--amber); background:var(--amber-soft); border-radius:10px; }
   .adaptive.on { display:block; }
-  .adaptive .label { color:var(--warn); }
+  .adaptive .label { color:#8a6416; }
+  .econ-warn { margin-top:10px; padding:10px 12px; border-radius:10px; border-left:4px solid var(--warn); background:var(--red-soft); color:var(--warn); font-size:13px; font-weight:600; }
+
+  /* ===================== БЛОК ПРИБЫЛИ: KPI, ВОДОПАД, ПРИЧИНЫ ===================== */
+  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; }
+  .kpi { border:1px solid #e3eee6; border-radius:11px; padding:11px 12px; background:linear-gradient(135deg,#effaf2,#e5f6e9); }
+  .kpi .name { font-size:12px; color:var(--muted); }
+  .kpi .v { font-size:19px; font-weight:800; letter-spacing:-.4px; margin-top:2px; }
+  .kpi.ok .v { color:var(--green-dark); }
+  .kpi.bad .v { color:var(--warn); }
+  .waterfall { margin-top:12px; }
+  .wf-row { display:grid; grid-template-columns:1fr 100px 100px; gap:8px; align-items:center; padding:8px 10px; border-radius:10px; margin:4px 0; font-size:13px; }
+  .wf-row.head { background:var(--surface-soft); font-weight:700; color:var(--muted); font-size:12px; }
+  .wf-row.pos { background:var(--green-soft); border-left:4px solid var(--good); }
+  .wf-row.neg { background:var(--red-soft); border-left:4px solid var(--warn); }
+  .wf-row.neu { background:var(--surface-soft); border-left:4px solid var(--line-strong); }
+  .wf-row .bar { height:8px; border-radius:4px; background:#e9eeeb; overflow:hidden; }
+  .wf-row .bar > i { display:block; height:100%; }
+  .wf-row.pos .bar > i { background:var(--good); }
+  .wf-row.neg .bar > i { background:var(--warn); }
+  .wf-row .num { text-align:right; font-weight:750; }
+  .wf-row .pct { text-align:right; color:var(--muted); font-size:12px; }
+  .reason { margin:6px 0 14px; padding:11px 12px; border-radius:10px; background:var(--surface-soft); border:1px dashed var(--line-strong); }
+  .reason .t { font-weight:750; font-size:13px; margin-bottom:4px; }
+  .reason .sol { font-size:13px; color:var(--ink); }
+  .reason .sol b { color:var(--green-dark); }
+  .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:750; margin-left:6px; }
+  .badge.neg { background:var(--red-soft); color:var(--warn); }
+  .badge.pos { background:var(--green-soft); color:var(--green-dark); }
+
+  /* ===================== ТАРИФЫ ПО ЗИСАМ ===================== */
+  #zoneTableWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .zone-table { width:100%; min-width:720px; border-collapse:collapse; font-size:12px; }
+  .zone-table th { text-align:left; padding:7px 5px; border-bottom:2px solid var(--line); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .zone-table td { padding:5px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .zone-table .z-in { width:76px; height:44px; padding:0 7px; border:1px solid var(--line-strong); border-radius:9px; font-size:13px; }
+  .zone-table .z-in.rate-bad { border-color:var(--warn); background:var(--red-soft); }
+  .zone-table .z-warn { font-size:12px; color:var(--muted); max-width:220px; }
+  .zone-table .z-warn.neg { color:var(--warn); font-weight:650; }
+  .zone-table .z-warn.warn { color:#8a6416; font-weight:650; }
+  .zone-table .z-del { height:44px; min-width:44px; padding:0 9px; }
+
+  /* ===================== ГРАФИКИ И МАТРИЦА ===================== */
   .chart-wrap { overflow-x:auto; }
   svg.chart { width:100%; min-width:320px; height:auto; display:block; }
   .chart-block { margin:12px 0 18px; }
-  .chart-title { font-weight:700; font-size:13px; margin-bottom:4px; }
+  .chart-title { font-weight:750; font-size:13px; margin-bottom:4px; }
   .chart-hint { font-weight:400; color:var(--muted); font-size:12px; }
   .chart-legend { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:4px; }
   .chart-legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
   .matrix-wrap { overflow-x:auto; }
-  table.matrix { border-collapse:collapse; width:100%; min-width:430px; font-size:13px; }
+  table.matrix { border-collapse:collapse; width:100%; min-width:430px; font-size:12px; }
   table.matrix th, table.matrix td { border:1px solid var(--line); padding:6px 7px; text-align:center; }
-  table.matrix th { background:#f3f5f8; color:var(--muted); font-size:12px; font-weight:700; }
-  table.matrix .m-name { text-align:left; font-weight:600; white-space:nowrap; }
+  table.matrix th { background:var(--surface-soft); color:var(--muted); font-size:12px; font-weight:750; }
+  table.matrix .m-name { text-align:left; font-weight:650; white-space:nowrap; }
   table.matrix .m-target { color:var(--muted); font-size:12px; }
-  table.matrix td.ok { background:#dcfae6; color:#0a6b3b; font-weight:700; }
-  table.matrix td.warn { background:#fef0c7; color:#b54708; font-weight:700; }
-  table.matrix td.bad { background:#fee4e2; color:#b42318; font-weight:700; }
+  table.matrix td.ok { background:var(--green-soft); color:var(--green-dark); font-weight:750; }
+  table.matrix td.warn { background:var(--amber-soft); color:#8a6416; font-weight:750; }
+  table.matrix td.bad { background:var(--red-soft); color:var(--warn); font-weight:750; }
   table.matrix td.na { color:#c3c8d0; }
-  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; }
-  .kpi { border:1px solid var(--line); border-radius:12px; padding:10px; background:#fff; }
-  .kpi .name { font-size:12px; color:var(--muted); }
-  .kpi .v { font-size:18px; font-weight:700; margin-top:2px; }
-  .kpi.ok .v { color:var(--acc2); }
-  .kpi.bad .v { color:var(--warn); }
-  /* Водопад причин */
-  .waterfall { margin-top:10px; }
-  .wf-row { display:grid; grid-template-columns: 1fr 90px 90px; gap:8px; align-items:center; padding:8px 10px; border-radius:10px; margin:4px 0; font-size:13px; }
-  .wf-row.head { background:#f3f5f8; font-weight:700; color:var(--muted); font-size:12px; }
-  .wf-row.pos { background:#effaf4; border-left:4px solid var(--good); }
-  .wf-row.neg { background:#fff5f4; border-left:4px solid var(--warn); }
-  .wf-row.neu { background:#f7f8fa; border-left:4px solid var(--line); }
-  .wf-row .bar { height:8px; border-radius:4px; background:#e6ecef; overflow:hidden; }
-  .wf-row .bar > i { display:block; height:100%; }
-  .wf-row.pos .bar > i { background:var(--good); }
-  .wf-row.neg .bar > i { background:var(--warn); }
-  .wf-row .num { text-align:right; font-weight:700; }
-  .wf-row .pct { text-align:right; color:var(--muted); font-size:12px; }
-  .reason { margin:6px 0 14px; padding:10px 12px; border-radius:10px; background:#fff; border:1px dashed var(--line); }
-  .reason .t { font-weight:700; font-size:13px; margin-bottom:4px; }
-  .reason .sol { font-size:13px; color:var(--ink); }
-  .reason .sol b { color:var(--acc2); }
-  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; margin-left:6px; }
-  .badge.neg { background:#fee4e2; color:var(--warn); }
-  .badge.pos { background:#dcfae6; color:var(--good); }
-  .econ-warn { margin-top:10px; padding:10px 12px; border-radius:10px; border-left:4px solid var(--warn); background:#fff5f4; color:var(--warn); font-size:13px; font-weight:600; }
-  #zoneTableWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .zone-table { width:100%; min-width:720px; border-collapse:collapse; font-size:13px; }
-  .zone-table th { text-align:left; padding:6px 4px; border-bottom:2px solid var(--line); font-size:12px; color:var(--muted); white-space:nowrap; }
-  .zone-table td { padding:4px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  .zone-table .z-in { width:74px; height:44px; padding:0 6px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
-  .zone-table .z-in.rate-bad { border-color:#b42318; background:#fff5f4; }
-  .zone-table .z-warn { font-size:12px; color:var(--muted); max-width:220px; }
-  .zone-table .z-warn.neg { color:#b42318; font-weight:600; }
-  .zone-table .z-warn.warn { color:var(--warn); font-weight:600; }
-  .zone-table .z-del { height:44px; min-width:44px; padding:0 8px; }
-  #result { min-height:260px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
-  #aiReport { min-height:320px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
-  #promptOut, #finalOut { min-height:240px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
-  #aiJsonIn { min-height:220px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; background:#fff; }
-  .ai-block { margin:12px 0; }
+  /* Палитра SVG-графиков: атрибуты fill/stroke из скрипта перекрываем на токены дизайна */
+  #charts [fill="#0b8a4b"] { fill:var(--green); }
+  #charts [stroke="#0b8a4b"] { stroke:var(--green); }
+  #charts [fill="#0a6b3b"] { fill:var(--green-dark); }
+  #charts [fill="#b42318"] { fill:#c9374a; }
+  #charts [stroke="#b42318"] { stroke:#c9374a; }
+  #charts [fill="#f79009"] { fill:var(--amber); }
+  #charts [fill="#98a2b3"] { fill:#87958d; }
+  #charts [stroke="#98a2b3"] { stroke:#87958d; }
+  #charts [fill="#c3c8d0"] { fill:var(--line-strong); }
+  #charts [fill="#d0d5dd"] { fill:var(--line-strong); }
+  #charts [fill="#475467"] { fill:#435149; }
+  #charts [fill="#667085"] { fill:var(--muted); }
+
+  /* ===================== ТЕКСТОВЫЕ ОТЧЁТЫ И AI-ЦИКЛ ===================== */
+  #result { min-height:280px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+  #aiReport, #promptOut, #finalOut { min-height:260px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; background:#0f172a; color:#e2e8f0; border-color:#1e293b; }
+  #aiJsonIn { min-height:200px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; background:#fff; }
+  #evalJsonIn { min-height:170px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; background:#fff; }
+  .ai-block { margin:10px 0; }
   .ai-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; font-size:13px; }
-  .mini-btn { height:44px; padding:0 14px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:14px; font-weight:700; cursor:pointer; }
+  .mini-btn { height:44px; padding:0 13px; border-radius:9px; border:1px solid var(--line-strong); background:#fff; color:#435149; font-size:13px; font-weight:750; cursor:pointer; }
   .mini-btn:active { transform:translateY(1px); }
-  .mini-btn.primary { background:var(--acc); color:#fff; border-color:var(--acc); }
-  .mini-btn.ai { background:#175cd3; color:#fff; border-color:#175cd3; }
+  .mini-btn.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  .mini-btn.ai { background:#0c5930; color:#fff; border-color:#0c5930; }
   .ai-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .file-btn { display:inline-flex; align-items:center; height:44px; padding:0 14px; border-radius:10px; border:1px solid var(--line); background:#fff; font-size:14px; font-weight:700; cursor:pointer; }
-  .sticky { position:fixed; left:0; right:0; bottom:0; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(246,247,249,.96); backdrop-filter:blur(8px); border-top:1px solid var(--line); display:flex; gap:8px; z-index:100; }
-  .sticky button { flex:1; height:52px; border:0; border-radius:14px; font-size:14px; font-weight:700; color:#fff; background:var(--acc); }
-  .sticky button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line); flex:0 0 24%; }
-  .sticky button.ai { background:#175cd3; flex:0 0 30%; }
-  .sticky button:active { transform:translateY(1px); }
+  .file-btn { display:inline-flex; align-items:center; height:44px; padding:0 13px; border-radius:9px; border:1px solid var(--line-strong); background:#fff; font-size:13px; font-weight:750; cursor:pointer; }
+  /* Шаги AI Workflow */
+  .workflow { display:grid; gap:7px; }
+  .workflow-step { display:grid; grid-template-columns:23px 1fr auto; align-items:center; gap:9px; padding:8px 9px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  .step-number { width:23px; height:23px; border-radius:50%; display:grid; place-items:center; background:var(--green-soft); color:var(--green-dark); font-weight:800; font-size:12px; }
+  .step-number.done { background:var(--green); color:#fff; }
+  .step-copy strong { display:block; font-size:13px; }
+  .step-copy small { display:block; color:var(--muted); font-size:12px; }
+  .step-current { border-color:#9bd6ad; background:var(--green-pale); }
+  /* Вложенные карточки бенчмарков и миграции — без двойной рамки */
+  #migrationNotice.card { border:0; box-shadow:none; padding:0; margin:0 0 10px; background:transparent; }
+  .app-notice { border-left:4px solid var(--amber); background:var(--amber-soft); border-radius:12px; padding:12px 14px; box-shadow:none; }
+  .app-notice .card-title { color:#8a6416; }
+  #benchmarkCard { border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-soft); }
 
-  /* YouTube-полоса сверху */
+  /* ===================== ЖИВАЯ ЛЕГЕНДА И ПОЛОСА ===================== */
   #ytWrap { position:fixed; top:0; left:0; right:0; height:4px; background:#e6ecef; z-index:9999; }
-  #ytBar { height:100%; width:0%; background:#b42318; transition: width .35s cubic-bezier(.4,0,.2,1), background .35s; position:relative; }
-  #ytBar::after { content:''; position:absolute; right:-2px; top:-3px; width:14px; height:10px; border-radius:50%; background:inherit; filter:blur(3px); opacity:.9; transition: opacity .3s; }
-  #ytBar.warn { background:#f79009; }
-  #ytBar.good { background:#0b8a4b; }
-
-  /* Живая легенда */
-  #liveLegend { top:8px; z-index:50; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:10px 0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
-  #liveLegend .row1 { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-  #liveLegend .status { font-weight:700; }
+  #ytBar { height:100%; width:0%; background:var(--green); transition:width .35s cubic-bezier(.4,0,.2,1), background .35s; }
+  #ytBar.warn { background:var(--amber); }
+  #ytBar.good { background:var(--green); }
+  #liveLegend { background:linear-gradient(135deg,#effaf2,#e5f6e9); border:1px solid #e3eee6; border-radius:11px; padding:12px; }
+  #liveLegend .row1 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  #liveLegend .status { font-weight:750; font-size:13px; }
   #liveLegend .status.low { color:var(--warn); }
-  #liveLegend .status.mid { color:#b54708; }
-  #liveLegend .status.high { color:var(--acc2); }
-  #liveLegend .score { font-weight:700; color:var(--ink); }
-  #liveLegend .contrib { margin-top:8px; display:grid; gap:4px; }
-  #liveLegend .breakdown { margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+  #liveLegend .status.mid { color:#8a6416; }
+  #liveLegend .status.high { color:var(--green-dark); }
+  #liveLegend .score { font-weight:800; font-size:22px; letter-spacing:-.6px; color:var(--ink); }
+  #liveLegend .contrib { margin-top:9px; display:grid; gap:4px; }
+  #liveLegend .breakdown { margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
   #liveLegend .breakdown b { color:var(--ink); }
-  #liveLegend .c { display:grid; grid-template-columns: 1fr 44px 80px; gap:8px; align-items:center; font-size:12px; }
-  #liveLegend .c .b { height:6px; border-radius:3px; background:#eef1f4; overflow:hidden; }
-  #liveLegend .c .b > i { display:block; height:100%; background:var(--acc); }
+  #liveLegend .c { display:grid; grid-template-columns:1fr 44px 80px; gap:8px; align-items:center; font-size:12px; }
+  #liveLegend .c .b { height:6px; border-radius:3px; background:rgba(255,255,255,.7); overflow:hidden; }
+  #liveLegend .c .b > i { display:block; height:100%; background:var(--green); }
   #liveLegend .c.neg .b > i { background:var(--warn); }
   #liveLegend .c .v { text-align:right; color:var(--muted); }
   #liveLegend .c .nm { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ===================== НИЖНЯЯ ПАНЕЛЬ ===================== */
+  .sticky { position:fixed; left:0; right:0; bottom:0; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(244,246,245,.96); backdrop-filter:blur(8px); border-top:1px solid var(--line); display:flex; gap:8px; z-index:30; }
+  .sticky button { flex:1 1 0; min-width:0; height:52px; padding:0 8px; border:0; border-radius:12px; font-size:13px; font-weight:750; color:#fff; background:var(--green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sticky button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line-strong); flex:0 1 auto; padding:0 12px; }
+  .sticky button.ai { background:#0c5930; flex:1 1 0; }
+  .sticky button:active { transform:translateY(1px); }
+
+  /* ===================== АДАПТИВ ===================== */
+  @media (max-width:1180px){
+    :root { --sidebar:218px; }
+    .content { padding:16px; }
+    .overview-row,.middle-row { grid-template-columns:1fr 1fr; }
+    .matrix-row { grid-template-columns:1fr; }
+    .bottom-row { grid-template-columns:1fr 1fr; }
+    .bottom-row .project-card { grid-column:span 2; }
+  }
+  @media (max-width:820px){
+    :root { --sidebar:0px; }
+    .sidebar { width:260px; transform:translateX(-100%); transition:transform .22s; }
+    .sidebar.open { transform:translateX(0); }
+    .mobile-scrim.show { display:block; position:fixed; inset:0; background:rgba(10,20,15,.45); z-index:15; }
+    .main { margin-left:0; }
+    .mobile-menu { display:inline-grid; place-items:center; border:0; background:transparent; padding:10px; margin-right:8px; color:var(--ink); }
+    .topbar { padding:10px 16px; min-height:68px; }
+    .top-title h1 { font-size:18px; }
+    .top-actions { gap:7px; }
+    .cycle-select { min-width:0; padding:7px 9px; }
+    .cycle-select strong { display:none; }
+    .content { padding:14px; }
+    .overview-row,.middle-row { grid-template-columns:1fr; }
+    .matrix-row { grid-template-columns:1fr; }
+    .bottom-row { grid-template-columns:1fr 1fr; }
+    .bottom-row .project-card { grid-column:auto; }
+  }
+  @media (max-width:560px){
+    .top-actions .icon-button { display:none; }
+    .cycle-select { max-width:150px; font-size:12px; }
+    .content { padding:10px; }
+    .grid { gap:10px; }
+    .card { padding:12px; }
+    .card-title { font-size:14px; }
+    .weeks { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .wk { padding:8px 4px; }
+    .grid2 { grid-template-columns:1fr; }
+    .kpi-grid { grid-template-columns:1fr 1fr; }
+    .wf-row { grid-template-columns:1fr 76px; }
+    .wf-row .pct { display:none; }
+    .bottom-row { grid-template-columns:1fr; }
+    .bottom-row .project-card { grid-column:auto; }
+    .workflow-step { grid-template-columns:23px 1fr; }
+    .workflow-step .mini-btn, .workflow-step .step-action { grid-column:2; justify-self:start; }
+    .sticky { gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); }
+    .sticky button { font-size:12px; }
+    .sticky button.secondary { padding:0 10px; }
+    .footnote { text-align:left; }
+  }
+  @media (prefers-reduced-motion:reduce){ *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
+
   /* Подсветка поля, которое меняет маржу */
   .q.flash { animation: flashField 1s ease; }
-  @keyframes flashField { 0% { box-shadow:0 0 0 0 rgba(11,138,75,0); } 30% { box-shadow:0 0 0 6px rgba(11,138,75,.25); } 100% { box-shadow:0 0 0 0 rgba(11,138,75,0); } }
+  @keyframes flashField { 0% { box-shadow:0 0 0 0 rgba(20,148,71,0); } 30% { box-shadow:0 0 0 6px rgba(20,148,71,.22); } 100% { box-shadow:0 0 0 0 rgba(20,148,71,0); } }
 </style>
 </head>
 <body>
-
 <div id="ytWrap"><div id="ytBar"></div></div>
 
-<h1>Даркстор: прибыль и влияние полей</h1>
-<div class="sub">Маржа и веса потерь калибруются на неделе 1. Полоса сверху показывает качество данных и прибыль. Легенда объясняет вклад полей.</div>
+<div class="app">
+  <div class="mobile-scrim" id="scrim" aria-hidden="true"></div>
 
-<div id="liveLegend">
-  <div class="row1">
-    <span class="status low" id="liveStatus">Оценка: недостаточно данных</span>
-    <span class="score" id="liveScore">0 / 100</span>
-  </div>
-  <div class="breakdown" id="liveBreakdown"></div>
-  <div class="contrib" id="liveContrib"></div>
+  <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
+    <a class="brand" href="#top" aria-label="DarkStore — наверх">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 2.8 36 11.5v17L20 37.2 4 28.5v-17L20 2.8Z" stroke="currentColor" stroke-width="2.2"/><path d="m4.8 11.8 15.2 8.7 15.2-8.7M20 20.5v16M12.3 7.1l15.5 8.8v8.4" stroke="currentColor" stroke-width="2"/></svg>
+      <span><span class="brand-name">DarkStore</span><span class="brand-sub">Analytics Workspace</span></span>
+    </a>
+    <nav class="nav">
+      <a class="active" href="#top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Главная</a>
+      <a href="#forms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l5 5v13H7zM15 3v5h5M10 13h7M10 17h7"/></svg>Операционные формы</a>
+      <a href="#analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V12M10 20V5M16 20V9M22 20V2"/></svg>Аналитика и матрица</a>
+      <a href="#ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2ZM19 16l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></svg>AI Workflow</a>
+      <a href="#benchmarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H4v3a4 4 0 0 0 4 4M16 6h4v3a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg>Бенчмарки</a>
+      <a href="#project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h7l2 2h9v11H3z"/></svg>Проект</a>
+    </nav>
+    <div class="nav-label">Текущий проект</div>
+    <div class="project-mini">
+      <div class="project-icon">▣</div>
+      <div><strong>Даркстор</strong><small><span class="live-dot"></span>локально в браузере</small></div>
+    </div>
+    <div class="sidebar-bottom">
+      <a href="#project"><span>⚙</span>Экспорт и импорт</a>
+      <a href="#ai"><span>ⓘ</span>Как читать отчёт</a>
+    </div>
+  </aside>
+
+  <main class="main" id="top">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;min-width:0">
+        <button class="mobile-menu" id="menuBtn" type="button" aria-label="Открыть меню" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <div class="top-title">
+          <h1>Даркстор: прибыль и влияние полей</h1>
+          <p class="sub">Маржа и веса потерь калибруются на неделе 1 · полоса сверху показывает качество данных и прибыль</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="cycle-select" aria-label="Текущая неделя цикла">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+          <span><strong>6 недель (цикл перезагрузки)</strong><small>Неделя <span id="promptWeek">1</span> из 6</small></span>
+        </div>
+        <div class="avatar" aria-label="Профиль">DS</div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <div class="card app-notice" id="migrationNotice" style="display:none">
+        <div class="card-head"><h2 class="card-title">Проект обновлён</h2></div>
+        <div class="hint" id="migrationText"></div>
+        <div class="ai-actions"><button type="button" class="mini-btn primary" id="migrationOkBtn">Понятно, перейти к проверке недель</button></div>
+      </div>
+
+      <section class="grid overview-row" aria-label="Обзор проекта">
+        <article class="card">
+          <div class="card-head"><h2 class="card-title">Обзор оценки и прибыли <span class="info" title="Живая легенда: обновляется на каждом вводе">i</span></h2></div>
+          <div id="liveLegend">
+            <div class="row1">
+              <span class="status low" id="liveStatus">Оценка: недостаточно данных</span>
+              <span class="score" id="liveScore">0 / 100</span>
+            </div>
+            <div class="breakdown" id="liveBreakdown"></div>
+            <div class="contrib" id="liveContrib"></div>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2 class="card-title">Шесть недель <span class="info" title="Переключение недель цикла">i</span></h2></div>
+          <div class="weeks" id="weeks"></div>
+          <div class="hint" id="weekHint"></div>
+        </article>
+      </section>
+
+      <section class="grid middle-row section-gap">
+        <article class="card" id="forms">
+          <div class="card-head"><h2 class="card-title">Операционные формы <span class="info" title="Форма недели: калибровка, метрики, тарифы по Зисам, куратор">i</span></h2></div>
+          <form id="survey"><div id="questions"></div></form>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2 class="card-title">Сводка результата</h2></div>
+          <div class="hint">Обновляется автоматически. Тап по полю — копирование.</div>
+          <textarea id="result" readonly></textarea>
+        </article>
+      </section>
+
+      <section class="grid matrix-row section-gap">
+        <article class="card" id="analytics">
+          <div class="card-head"><h2 class="card-title">Прибыли, потери и матрица метрик <span class="info" title="Прибыль — столбцами, метрики — с коридором цели, ниже матрица «метрика × неделя»">i</span></h2></div>
+          <div class="hint">Наведите курсор на точку или столбец, чтобы увидеть значение. Факт прошлых недель отмечается на графиках.</div>
+          <div class="chart-wrap" id="charts"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2 class="card-title">Отчёт для анализа ИИ</h2></div>
+          <div class="hint">Структурированный текст: цель, калибровка, метрики, причины изменения маржи, решения, риски. Кнопка «Отчёт ИИ» в нижней панели копирует его.</div>
+          <textarea id="aiReport" readonly></textarea>
+        </article>
+      </section>
+
+      <section class="grid bottom-row section-gap">
+        <article class="card" id="ai">
+          <div class="card-head"><h2 class="card-title">AI Workflow <span class="info" title="Цикл: промпт → JSON плана → оценка → финальный отчёт">i</span></h2></div>
+          <div class="workflow">
+            <div class="workflow-step"><span class="step-number done">1</span><span class="step-copy"><strong>Промпт недели</strong><small>Задача для ИИ по схеме strategy/2</small></span><button type="button" class="mini-btn" id="copyPromptBtn">Копировать</button></div>
+            <div class="ai-block"><textarea id="promptOut" readonly></textarea></div>
+
+            <div class="workflow-step"><span class="step-number done">2</span><span class="step-copy"><strong>JSON плана</strong><small>actions · expected · week_plan</small></span><button type="button" class="mini-btn primary" id="applyAiBtn">Проверить и применить</button></div>
+            <div class="ai-block">
+              <textarea id="aiJsonIn" placeholder='{"strategy_name": "…", "actions": [...], "expected": {...}, ...}'></textarea>
+              <div class="hint" id="aiApplyStatus">Ожидание ответа ИИ.</div>
+            </div>
+
+            <div class="workflow-step"><span class="step-number">3</span><span class="step-copy"><strong>Evaluation / 2</strong><small>Проверка ответа ИИ-оценщика</small></span><button type="button" class="mini-btn" id="checkEvalBtn">Проверить оценку</button></div>
+            <div class="ai-block">
+              <textarea id="evalJsonIn" placeholder='{"schema_version": "evaluation/2", "verdict": "…", "mape_pct": null, "mape_status": "not_applicable_no_ai_runs", "risk_score": 0.8, "risk_scale": "0-1", "confidence_in_verdict": 0.6, "gaps_ranked": [...], "top_effect_action": "…", "next_3_weeks": [...]}'></textarea>
+              <div class="hint" id="evalStatus">Вставьте ответ ИИ по финальному отчёту (раздел 7) — проверка схемы evaluation/2.</div>
+            </div>
+
+            <div class="workflow-step step-current"><span class="step-number">4</span><span class="step-copy"><strong>Финальный отчёт</strong><small>Итоговый отчёт и JSON-сводка для оценки</small></span><button type="button" class="mini-btn ai" id="finalBtn">Собрать</button></div>
+            <div class="ai-block" id="finalBlock" style="display:none">
+              <div class="ai-head"><b>Финальный отчёт для оценки в ИИ</b><button type="button" class="mini-btn" id="copyFinalBtn">Копировать</button></div>
+              <textarea id="finalOut" readonly></textarea>
+            </div>
+          </div>
+        </article>
+
+        <article class="card" id="benchmarks">
+          <div class="card-head"><h2 class="card-title">Бенчмарки рынка</h2></div>
+          <div class="card" id="benchmarkCard" style="display:none">
+            <div class="card-head"><h2 class="card-title">Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2></div>
+            <div class="hint">Чтобы сравнить даркстор с рынком, укажите рыночные значения и источник с датой. Без источника бенчмарк не принимается: ИИ должен опираться на ваши числа, а не выдумывать их.</div>
+            <div id="benchmarkForm"></div>
+            <div class="hint" id="benchmarkStatus"></div>
+            <div class="ai-actions">
+              <button type="button" class="mini-btn primary" id="benchmarkSaveBtn">Сохранить бенчмарки</button>
+              <button type="button" class="mini-btn" id="benchmarkSkipBtn">Нет данных — без бенчмарков</button>
+              <button type="button" class="mini-btn" id="benchmarkEditBtn">Изменить</button>
+            </div>
+            <div id="benchmarkSummary" class="hint"></div>
+          </div>
+          <div class="hint">Метрики сравнения: маржа % от чека, средний чек, ставка курьеру, опоздания. Без бенчмарков отчёт честно помечает их как не подключённые.</div>
+        </article>
+
+        <article class="card project-card" id="project">
+          <div class="card-head"><h2 class="card-title">Проект <span class="info" title="Данные проекта хранятся локально в браузере">i</span></h2></div>
+          <div class="hint">Недели, прогоны ИИ, оценки и бенчмарки хранятся локально. Экспорт — файл JSON; импорт переносит проект целиком и при необходимости мигрирует схему.</div>
+          <div class="ai-actions">
+            <button type="button" class="mini-btn" id="exportBtn">Экспорт JSON</button>
+            <label class="file-btn">Загрузить проект<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+            <button type="button" class="mini-btn" id="benchmarkOpenBtn">Бенчмарки рынка</button>
+          </div>
+          <div class="hint" style="margin-top:10px">Superset: кнопка в нижней панели — данные подтягиваются расширением DarkStore Superset Bridge. Там же сброс проекта и переключение недель.</div>
+        </article>
+      </section>
+
+      <p class="footnote">Интерфейс v1.1 · расчёты выполняются локально в браузере · отчёт и промпт формируются автоматически</p>
+    </div>
+  </main>
 </div>
-
-<div class="card" id="migrationNotice" style="display:none;">
-  <h2>Проект обновлён</h2>
-  <div class="hint" id="migrationText"></div>
-  <div class="ai-actions"><button type="button" class="mini-btn primary" id="migrationOkBtn">Понятно, перейти к проверке недель</button></div>
-</div>
-
-<div class="card" id="benchmarkCard" style="display:none;">
-  <h2>Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2>
-  <div class="hint">Чтобы сравнить даркстор с рынком, укажите рыночные значения и источник с датой. Без источника бенчмарк не принимается: ИИ должен опираться на ваши числа, а не выдумывать их.</div>
-  <div id="benchmarkForm"></div>
-  <div class="hint" id="benchmarkStatus"></div>
-  <div class="ai-actions">
-    <button type="button" class="mini-btn primary" id="benchmarkSaveBtn">Сохранить бенчмарки</button>
-    <button type="button" class="mini-btn" id="benchmarkSkipBtn">Нет данных — без бенчмарков</button>
-    <button type="button" class="mini-btn" id="benchmarkEditBtn">Изменить</button>
-  </div>
-  <div id="benchmarkSummary" class="hint"></div>
-</div>
-
-<div class="card">
-  <div class="weeks" id="weeks"></div>
-  <div class="hint" id="weekHint"></div>
-</div>
-
-<form id="survey">
-  <div id="questions"></div>
-  <div class="card">
-    <h2>Графики и матрица статусов</h2>
-    <div class="hint" style="margin-bottom:8px;">Прибыль — столбцами, метрики — с коридором цели и цветом точки по статусу, ниже — матрица «метрика × неделя». Наведите курсор на точку или столбец, чтобы увидеть значение.</div>
-    <div class="chart-wrap" id="charts"></div>
-  </div>
-  <div class="card">
-    <h2>Сводка результата</h2>
-    <div class="hint" style="margin-bottom:8px;">Обновляется автоматически. Тап по полю — копирование.</div>
-    <textarea id="result" readonly></textarea>
-  </div>
-  <div class="card">
-    <h2>Отчёт для анализа ИИ</h2>
-    <div class="hint" style="margin-bottom:8px;">Структурированный текст: цель, калибровка, метрики, причины изменения маржи, решения, риски. Кнопка «Отчёт ИИ» копирует его.</div>
-    <textarea id="aiReport" readonly></textarea>
-  </div>
-  <div class="card">
-    <h2>Цикл ИИ: промпт → JSON → следующая неделя</h2>
-    <div class="hint" style="margin-bottom:8px;">1) скопируйте промпт текущей недели; 2) отправьте ИИ; 3) вставьте ответ JSON; 4) «Проверить и применить» — план уйдёт в неделю N+1. Всё сохраняется в localStorage.</div>
-    <div class="ai-block">
-      <div class="ai-head"><b>Промпт для ИИ (неделя <span id="promptWeek">1</span>)</b><button type="button" class="mini-btn" id="copyPromptBtn">Копировать</button></div>
-      <textarea id="promptOut" readonly></textarea>
-    </div>
-    <div class="ai-block">
-      <div class="ai-head"><b>Ответ ИИ (JSON)</b><button type="button" class="mini-btn primary" id="applyAiBtn">Проверить и применить</button></div>
-      <textarea id="aiJsonIn" placeholder='{"strategy_name": "…", "actions": [...], "expected": {...}, ...}'></textarea>
-      <div class="hint" id="aiApplyStatus">Ожидание ответа ИИ.</div>
-    </div>
-    <div class="ai-block">
-      <div class="ai-head"><b>Оценка от ИИ-оценщика (JSON, evaluation/2)</b><button type="button" class="mini-btn" id="checkEvalBtn">Проверить оценку</button></div>
-      <textarea id="evalJsonIn" placeholder='{"schema_version": "evaluation/2", "verdict": "…", "mape_pct": null, "mape_status": "not_applicable_no_ai_runs", "risk_score": 0.8, "risk_scale": "0-1", "confidence_in_verdict": 0.6, "gaps_ranked": [...], "top_effect_action": "…", "next_3_weeks": [...]}'></textarea>
-      <div class="hint" id="evalStatus">Вставьте ответ ИИ по финальному отчёту (раздел 7) — проверка схемы evaluation/2.</div>
-    </div>
-    <div class="ai-actions">
-      <button type="button" class="mini-btn" id="exportBtn">Экспорт JSON</button>
-      <label class="file-btn">Загрузить проект<input type="file" id="importFile" accept="application/json,.json" hidden></label>
-      <button type="button" class="mini-btn" id="benchmarkOpenBtn">Бенчмарки рынка</button>
-      <button type="button" class="mini-btn ai" id="finalBtn">Финальный отчёт</button>
-    </div>
-    <div class="ai-block" id="finalBlock" style="display:none;">
-      <div class="ai-head"><b>Финальный отчёт для оценки в ИИ</b><button type="button" class="mini-btn" id="copyFinalBtn">Копировать</button></div>
-      <textarea id="finalOut" readonly></textarea>
-    </div>
-  </div>
-</form>
 
 <div class="sticky">
-  <button type="button" class="secondary" id="dsSupersetBtn" style="background:#0b8a4b;color:#fff;border-color:#0b8a4b;">Superset</button>
-  <button type="button" class="secondary" id="resetBtn">╨б╨▒╤А╨╛╤Б</button>
-  <button type="button" class="secondary" id="prevBtn">тЖР</button>
-  <button type="button" id="nextBtn">╨Ф╨░╨╗╨╡╨╡ тЖТ</button>
-  <button type="button" class="ai" id="copyAiBtn">╨Ю╤В╤З╤С╤В ╨Ш╨Ш</button>
+  <button type="button" class="secondary" id="dsSupersetBtn">Superset</button>
+  <button type="button" class="secondary" id="resetBtn">Сброс</button>
+  <button type="button" class="secondary" id="prevBtn">←</button>
+  <button type="button" id="nextBtn">Далее →</button>
+  <button type="button" class="ai" id="copyAiBtn">Отчёт ИИ</button>
 </div>
 
 <script>
@@ -3947,6 +4172,58 @@
     return { applied: patch, via: 'state' };
   };
 })();
+</script>
+<script>
+  // UI-скрипт v1.1: мобильное меню сайдбара и подсветка активного раздела.
+  // Не относится к расчётам: не трогает состояние проекта, localStorage и схемы.
+  (function () {
+    var btn = document.getElementById('menuBtn'), sb = document.getElementById('sidebar'), sc = document.getElementById('scrim');
+    var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+    if (sb && sc && btn) {
+      var close = function () { sb.classList.remove('open'); sc.classList.remove('show'); btn.setAttribute('aria-expanded', 'false'); };
+      btn.addEventListener('click', function () { var open = sb.classList.toggle('open'); sc.classList.toggle('show', open); btn.setAttribute('aria-expanded', String(open)); });
+      sc.addEventListener('click', close);
+      links.forEach(function (a) { a.addEventListener('click', close); });
+    }
+    if (links.length) {
+      var spy = function () {
+        var y = window.scrollY + 140, best = links[0];
+        links.forEach(function (a) {
+          var t = document.querySelector(a.getAttribute('href'));
+          if (t && t.offsetTop <= y) best = a;
+        });
+        links.forEach(function (a) { a.classList.toggle('active', a === best); });
+      };
+      window.addEventListener('scroll', spy, { passive: true });
+      spy();
+    }
+  })();
+</script>
+<script>
+  // UI-скрипт v1.1: мобильное меню сайдбара и подсветка активного раздела.
+  // Не относится к расчётам: не трогает состояние проекта, localStorage и схемы.
+  (function () {
+    var btn = document.getElementById('menuBtn'), sb = document.getElementById('sidebar'), sc = document.getElementById('scrim');
+    var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+    if (sb && sc && btn) {
+      var close = function () { sb.classList.remove('open'); sc.classList.remove('show'); btn.setAttribute('aria-expanded', 'false'); };
+      btn.addEventListener('click', function () { var open = sb.classList.toggle('open'); sc.classList.toggle('show', open); btn.setAttribute('aria-expanded', String(open)); });
+      sc.addEventListener('click', close);
+      links.forEach(function (a) { a.addEventListener('click', close); });
+    }
+    if (links.length) {
+      var spy = function () {
+        var y = window.scrollY + 140, best = links[0];
+        links.forEach(function (a) {
+          var t = document.querySelector(a.getAttribute('href'));
+          if (t && t.offsetTop <= y) best = a;
+        });
+        links.forEach(function (a) { a.classList.toggle('active', a === best); });
+      };
+      window.addEventListener('scroll', spy, { passive: true });
+      spy();
+    }
+  })();
 </script>
 </body>
 </html>

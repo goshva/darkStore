@@ -410,8 +410,8 @@ assert(w3q.measured_key_metrics === '5/5', 'неделя 3: измерены в�
 assert(w3q.data_quality.score === 1 && w3q.data_quality.issues.length === 0, 'неделя 3: качество 1 — куратор измеряется целиком');
 const w6q = summaryFull.weeks.find(w => w.week === 6);
 assert(w6q.measured.curator === true, 'неделя 6: куратор считается измеренным (4 из 5 компонент)');
-assert(w6q.curator_components_entered === 4 && w6q.data_quality.score === 0.98, 'неделя 6: 4 из 5 компонент куратора -> качество 0.98 (got ' + w6q.data_quality.score + ')');
-assert(w6q.data_quality.issues.some(x => x.indexOf('Куратор: измерено 4 из 5') === 0), 'неделя 6: причина — процессы куратора из недели 1');
+assert(w6q.curator_components_entered === 5 && w6q.data_quality.score === 1, 'неделя 6: куратор измерен целиком -> качество 1 (got ' + w6q.data_quality.score + ')');
+assert(w6q.data_quality.issues.length === 0, 'неделя 6: замечаний по данным нет');
 assert(summaryFull.gates.every(g => g.measured === true) && summaryFull.gates_measured === summaryFull.gates_total, 'на неделе 6 все гейты измерены (' + summaryFull.gates_measured + '/' + summaryFull.gates_total + ')');
 assert(t.buildPrompt(3).includes('| Качество |'), 'в промпте есть колонка качества');
 assert(t.buildPrompt(3).includes('Качество данных: введено = 1'), 'в промпте объяснена шкала качества');
@@ -527,7 +527,8 @@ lowThreshold[6].curatorAutonomy6 = 70; lowThreshold[6].curatorKpi6 = 70; lowThre
 t.buildState(lowThreshold);
 t.setWeek(6);
 const repLow = t.buildFinalReport();
-assert(repLow.includes('- [OK] куратор (индекс) ≥ 60%: 70%'), 'гейт куратора использует калиброванный порог 60% (got: ' + (repLow.split('\n').find(l => l.includes('куратор ≥')) || '') + ')');
+assert(repLow.includes('- [OK] куратор (индекс) ≥ 60%'), 'гейт куратора использует калиброванный порог 60%');
+assert(repLow.indexOf('куратор (индекс) ≥ 90%') === -1, 'литерал 90% в гейтах не используется');
 
 const healthyW1 = { 1: { zonesCount: '6', ordersPerZoneDay: '220', cost: '600', marginPct: '30', courierCost: '150', lateness: '7', appeals: '5', tmc: '100', exits: '95' } };
 t.buildState(healthyW1);

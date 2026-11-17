@@ -190,7 +190,7 @@ check(gateRep.indexOf('куратор (индекс) ≥ 90%') === -1, 'Н-4: л
 t.buildState({
   1: Object.assign({}, BUILTIN[1], { tmc: '100' }),
   2: { zoneOrders2: 220, zoneCouriers2: 5, lateness2: 26.5, appeals2: 15, exits2: 90, cost2: 100,
-       curatorAutonomy2: 80, curatorKpi2: 80, curatorTraining2: 80, curatorInvolvement2: 80 }
+       curatorProcess2: 80, curatorAutonomy2: 80, curatorKpi2: 80, curatorTraining2: 80, curatorInvolvement2: 80 }
 });
 const inhRep = t.buildFinalReport();
 const inhSum = JSON.parse(inhRep.slice(inhRep.indexOf('{\n  "model_version"'), inhRep.indexOf('\n\n## 7.')));
@@ -201,7 +201,7 @@ check(inhRep.indexOf('[Н/Д] ТМЦ') !== -1, 'в тексте отчёта г�
 check(inhSum.gates_passed === (inhSum.gates.filter(function (g) { return g.measured; }).every(function (g) { return g.ok; })),
   'gates_passed не учитывает [Н/Д]');
 check(inhSum.weeks.find(function (w) { return w.week === 2; }).measured.tmc === false, 'неделя 2: measured.tmc = false');
-check(inhSum.weeks.find(function (w) { return w.week === 2; }).data_quality.score === 0.88, 'неделя 2: качество данных 0.88');
+check(inhSum.weeks.find(function (w) { return w.week === 2; }).data_quality.score === 0.9, 'неделя 2: качество данных 0.9 (ТМЦ унаследован)');
 
 // Н-6: MAPE без данных — null, а не 0
 check(rep.indexOf('"mape_pct": null') !== -1, 'Н-6: в задаче оценщику mape_pct = null');
