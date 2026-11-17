@@ -89,7 +89,7 @@
     if (document.getElementById('dsBridgeStyle')) return;
     var s = document.createElement('style');
     s.id = 'dsBridgeStyle';
-    s.textContent = '#dsBridgeBar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}' +
+    s.textContent = '#dsBridgeBar {display: flex;gap: 10px;flex-wrap: wrap;margin: 8px 281px;}' +
       '#dsBridgeBar button{padding:10px 14px;border-radius:12px;border:1px solid #0b8a4b;background:#0b8a4b;color:#fff;font-size:14px;font-weight:600;cursor:pointer}' +
       '#dsBridgeBar button.alt{background:#fff;color:#0a6b3b}' +
       '#dsBridgeStatus{font-size:13px;color:#0a6b3b;margin:4px 0 min-height:18px}' +
