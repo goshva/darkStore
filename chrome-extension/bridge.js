@@ -225,6 +225,16 @@
         catch (e) { sendResponse({ ok: false, error: e.message }); }
         return;
       }
+      // ── пакетное нанесение фактов на графики ──
+      if (msg.type === 'DARKSTORE_FACTS') {
+        try {
+          applyPatch(msg.patch, msg.notes);
+          if (window.__dsFacts) window.__dsFacts.add(msg.snaps);
+          if (typeof window.render === 'function') window.render(true);
+          sendResponse({ ok: true });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        return;
+      }
     });
   }
 
@@ -232,6 +242,47 @@
     importSnapshot: importSnapshot, exportJSON: exportJSON, exportFile: exportFile,
     applyPatch: applyPatch, readSnap: readSnap, KEY: KEY
   };
+
+  // ── рисование исторических фактов поверх графиков ──
+  // Подключается в window.__dsHooks.factLine и window.__dsFacts.add()
+  (function initFacts() {
+    if (typeof SupersetCore !== 'undefined' && window.__dsHistory) {
+      window.__dsFacts = {
+        _data: [],
+        add: function (snaps) {
+          // snaps = [{snapshot:{date, orders_per_day, avg_check_rub, share_not_in_slot_pct}}, ...]
+          snaps.forEach(function (s) { window.__dsHistory.addDay(s.snapshot); });
+        },
+        getWeeks: function (planWeeks) {
+          var m = window.__dsHistory;
+          return m.compareWithPlan(planWeeks, m.load().weeks);
+        },
+        render: function (planWeeks) {
+          var m = window.__dsHistory;
+          var w = m.load().weeks;
+          var keys = Object.keys(w).sort();
+          // map: индекс в неделе → факт (среднее по дням недели)
+          var factByWeekIdx = [];
+          keys.forEach(function (mon, i) {
+            if (i >= TOTAL_WEEKS) return;
+            var fw = w[mon];
+            if (fw && fw.orders_per_day) {
+              factByWeekIdx[i] = { orders: fw.orders_per_day, check: fw.avg_check_rub, slot: fw.share_not_in_slot_pct };
+            }
+          });
+          // установить хук для line-графиков
+          window.__dsHooks.factLine = function (X, Y, fmtV) {
+            var svg = '';
+            factByWeekIdx.forEach(function (f, i) {
+              if (f == null) return;
+              svg += '<line x1="' + X(i).toFixed(1) + '" y1="' + Y(f.orders).toFixed(1) + '" x2="' + (X(i) + 1).toFixed(1) + '" y2="' + Y(f.orders).toFixed(1) + '" stroke="#7a5af8" stroke-width="2" stroke-dasharray="4 4" opacity="0.7"><title>Факт Н' + (i + 1) + ': ' + fmtV(f.orders) + '</title></line>';
+            });
+            return svg;
+          };
+        }
+      };
+    }
+  })();
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectUI);
   else injectUI();

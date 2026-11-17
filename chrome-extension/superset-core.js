@@ -103,6 +103,20 @@
 
   function round2(v) { return Math.round(v * 100) / 100; }
 
+  /* ---------- week helpers (неделя = Пн..Вс) ---------- */
+  function parseISO(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+  function addDays(d, n) { var r = new Date(d); r.setDate(r.getDate() + n); return r; }
+  // понедельник недели, в которую попадает дата (ISO: Пн=1)
+  function mondayOf(dateStr) {
+    var d = parseISO(dateStr), dow = d.getDay();
+    return iso(addDays(d, dow === 0 ? -6 : 1 - dow));
+  }
+  function weekDates(mondayStr) {
+    var m = parseISO(mondayStr), out = [];
+    for (var i = 0; i < 7; i++) out.push(iso(addDays(m, i)));
+    return out;
+  }
+
   /* ---------- mapping: snapshot -> поля модели darkStoreBB ----------
      Возвращает патч для недели 1 (базовая неделя) + пояснения, что откуда взялось и что осталось руками. */
   function mapToForm(snap) {
@@ -147,6 +161,7 @@
     BASE: BASE, DASHBOARD_ID: DASHBOARD_ID, DATASOURCE_ID: DATASOURCE_ID, SLICE_ID: SLICE_ID, METRICS: METRICS,
     buildQueryBody: buildQueryBody, chartUrl: chartUrl,
     aggregateRows: aggregateRows, toSnapshot: toSnapshot, mapToForm: mapToForm,
-    todayISO: todayISO, yesterdayISO: yesterdayISO, lastDaysRange: lastDaysRange, iso: iso
+    todayISO: todayISO, yesterdayISO: yesterdayISO, lastDaysRange: lastDaysRange, iso: iso,
+    mondayOf: mondayOf, weekDates: weekDates, parseISO: parseISO, addDays: addDays
   };
 });

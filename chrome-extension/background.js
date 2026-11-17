@@ -13,7 +13,6 @@ function findSupersetTab(cb) {
 
 function findDarkstoreTab(cb) {
   chrome.tabs.query({ url: DARKSTORE_GLOB }, function (tabs) {
-    // предпочитаем вкладки с darkStoreBB/index.html
     var list = tabs || [];
     var best = null;
     for (var i = 0; i < list.length; i++) {
@@ -24,7 +23,6 @@ function findDarkstoreTab(cb) {
   });
 }
 
-// Гарантирует, что inject.js/bridge.js загружены во вкладке (для старых вкладок без content-script).
 function ensureScripts(tabId, files, cb) {
   chrome.scripting.executeScript({ target: { tabId: tabId }, files: files }, function () {
     var err = chrome.runtime.lastError;
@@ -39,37 +37,128 @@ function sendToTab(tabId, msg, cb) {
   });
 }
 
-function pullFromSuperset(opts, cb) {
+function pullOneDay(shopno, date, cb) {
   findSupersetTab(function (tab) {
-    if (!tab) { cb({ ok: false, error: 'Откройте вкладку superset.svc.vkusvill.ru (дашборд services_lite) и авторизуйтесь.' }); return; }
-    ensureScripts(tab.id, ['superset-core.js', 'inject.js'], function (err) {
-      if (err) { cb({ ok: false, error: 'Не удалось внедрить скрипт в Superset: ' + err }); return; }
-      sendToTab(tab.id, { type: 'DARKSTORE_PULL', opts: opts || {} }, cb);
+    if (!tab) { cb({ ok: false, error: 'Нет вкладки Superset' }); return; }
+    ensureScripts(tab.id, ['superset-core.js', 'inject.js'], function () {
+      sendToTab(tab.id, { type: 'DARKSTORE_PULL', opts: { shopno: shopno, date: date } }, cb);
     });
   });
+}
+
+// Пакетное извлечение N дней (для режима «6 недель»)
+function pullWeeks(shopno, numWeeks, cb) {
+  var core = typeof SupersetCore !== 'undefined' ? SupersetCore : null;
+  if (!core) {
+    // fallback: генерируем понедельники через background
+    var ref = new Date();
+    ref.setHours(0, 0, 0, 0);
+    var dow = ref.getDay();
+    var thisMon = new Date(ref);
+    thisMon.setDate(thisMon.getDate() - (dow === 0 ? 6 : dow - 1));
+    var mondays = [];
+    for (var i = 1; i <= numWeeks; i++) mondays.push(new Date(thisMon.getTime() - 7 * 1000 * 60 * 60 * 24 * 7 * i));
+    var dates = [];
+    mondays.forEach(function (mon) {
+      for (var d = 0; d < 7; d++) {
+        var dd = new Date(mon.getTime() + 1000 * 60 * 60 * 24 * d);
+        var dateStr = dd.getFullYear() + '-' + ('0' + (dd.getMonth() + 1)).slice(-2) + '-' + ('0' + dd.getDate()).slice(-2);
+        if (dateStr < (new Date().toISOString().slice(0, 10))) dates.push(dateStr);
+      }
+    });
+    dates.sort(); // от старой к новой
+
+    var results = [];
+    var idx = 0;
+
+    function pullNext() {
+      if (idx >= dates.length) {
+        cb({ ok: true, result: { snaps: results } });
+        return;
+      }
+      var date = dates[idx++];
+      pullOneDay(shopno, date, function (resp) {
+        if (resp.ok && resp.result) {
+          results.push(resp.result);
+          pullNext();
+        } else {
+          // пропуск пустых дней (например, праздники)
+          pullNext();
+        }
+      });
+    }
+
+    pullNext();
+    return;
+  }
+
+  // Если core доступен (из Superset вкладка), используем его
+  var ref = new Date();
+  ref.setHours(0, 0, 0, 0);
+  var dow = ref.getDay();
+  var thisMon = new Date(ref);
+  thisMon.setDate(thisMon.getDate() - (dow === 0 ? 6 : dow - 1));
+  var mondays = [];
+  for (var i = 1; i <= numWeeks; i++) mondays.push(new Date(thisMon.getTime() - 7 * 1000 * 60 * 60 * 24 * 7 * i));
+  var allDates = [];
+  mondays.forEach(function (mon) {
+    for (var d = 0; d < 7; d++) {
+      var dd = new Date(mon.getTime() + 1000 * 60 * 60 * 24 * d);
+      var dateStr = dd.getFullYear() + '-' + ('0' + (dd.getMonth() + 1)).slice(-2) + '-' + ('0' + dd.getDate()).slice(-2);
+      if (dateStr < (new Date().toISOString().slice(0, 10))) allDates.push(dateStr);
+    }
+  });
+
+  var results = [];
+  var idx = 0;
+  function pullNext() {
+    if (idx >= allDates.length) {
+      cb({ ok: true, result: { snaps: results } });
+      return;
+    }
+    var date = allDates[idx++];
+    pullOneDay(shopno, date, function (resp) {
+      if (resp.ok && resp.result) {
+        results.push(resp.result);
+        pullNext();
+      } else {
+        pullNext();
+      }
+    });
+  }
+  pullNext();
 }
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (!msg || !msg.type) return;
 
   if (msg.type === 'DARKSTORE_PULL') {
-    pullFromSuperset(msg.opts, sendResponse);
+    if (msg.opts && msg.opts.weeks) {
+      // Режим «N недель»
+      pullWeeks(msg.opts.shopno, msg.opts.weeks, sendResponse);
+      return true;
+    }
+    // Обычный одиночный день
+    pullOneDay(msg.opts.shopno, msg.opts.date, sendResponse);
     return true;
   }
 
-  // Запрос из страницы darkStoreBB (кнопка «⚡ Из Superset»): тянем и сразу вставляем.
   if (msg.type === 'DARKSTORE_PULL_ALL') {
     var tabId = sender.tab && sender.tab.id;
-    pullFromSuperset(msg.opts || {}, function (resp) {
-      if (!resp.ok || !tabId) { sendResponse(resp); return; }
-      sendToTab(tabId, { type: 'DARKSTORE_IMPORT_SNAP', snap: resp.result }, function (applyRes) {
-        sendResponse(applyRes && applyRes.ok ? { ok: true, result: resp.result, applied: applyRes.result } : applyRes);
+    findSupersetTab(function (tab) {
+      if (!tab) { sendResponse({ ok: false, error: 'Откройте вкладку superset.svc.vkusvill.ru.' }); return; }
+      ensureScripts(tab.id, ['superset-core.js', 'inject.js'], function () {
+        sendToTab(tab.id, { type: 'DARKSTORE_PULL', opts: msg.opts || {} }, function (resp) {
+          if (!resp.ok || !tabId) { sendResponse(resp); return; }
+          sendToTab(tabId, { type: 'DARKSTORE_IMPORT_SNAP', snap: resp.result }, function (applyRes) {
+            sendResponse(applyRes && applyRes.ok ? { ok: true, result: resp.result, applied: applyRes.result } : applyRes);
+          });
+        });
       });
     });
     return true;
   }
 
-  // Popup: какие вкладки открыты /状态
   if (msg.type === 'DARKSTORE_TABS') {
     findSupersetTab(function (ss) {
       findDarkstoreTab(function (ds) {
@@ -80,11 +169,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return true;
   }
 
-  // Popup «Вставить в darkStoreBB»: находим вкладку проекта и шлём патч.
   if (msg.type === 'DARKSTORE_APPLY_TO_PAGE') {
     findDarkstoreTab(function (ds) {
       if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена.' }); return; }
-      ensureScripts(ds.id, ['bridge.js'], function () {
+      ensureScripts(ds.id, ['history.js', 'bridge.js'], function () {
         sendToTab(ds.id, { type: 'DARKSTORE_APPLY_PATCH', patch: msg.patch, notes: msg.notes }, sendResponse);
       });
     });

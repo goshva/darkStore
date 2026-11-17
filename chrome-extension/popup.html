@@ -29,12 +29,18 @@
     <option value="today">Сегодня (неполный)</option>
     <option value="7">Последние 7 дней</option>
     <option value="custom">Дата…</option>
+    <option value="6w">6 недель подряд</option>
   </select></div>
   <div class="row" id="dateRow" style="display:none;"><label for="date">Дата</label><input type="text" id="date" placeholder="YYYY-MM-DD" inputmode="numeric"></div>
+  <div class="row" id="weeksRow" style="display:none;"><label for="weeksN">Недель</label><select id="weeksN">
+    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+    <option value="4">4</option><option value="5">5</option><option value="6" selected>6</option>
+  </select></div>
   <button id="pullBtn">1 · Загрузить данные</button>
   <div id="preview"></div>
   <button id="applyBtn" class="secondary" style="display:none;">2 · Вставить в darkStoreBB</button>
   <button id="jsonBtn" class="secondary" style="display:none;">3 · Скачать JSON</button>
+  <button id="chartBtn" class="secondary" style="display:none;">📊 Показать факты на графиках</button>
   <div id="status" class="status" hidden></div>
   <div class="hint" id="tabHint"></div>
   <script src="popup.js"></script>

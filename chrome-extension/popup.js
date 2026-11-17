@@ -1,15 +1,20 @@
-/* popup.js — интерфейс расширения: загрузка из Superset, предпросмотр, вставка в darkStoreBB, скачивание JSON. */
+/* popup.js — логика popup'а расширения DarkStore Superset Bridge. */
 (function () {
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
   var shopInput = $('shopno'), periodSel = $('period'), dateInput = $('date'), dateRow = $('dateRow');
-  var pullBtn = $('pullBtn'), applyBtn = $('applyBtn'), jsonBtn = $('jsonBtn');
+  var weeksN = $('weeksN'), weeksRow = $('weeksRow');
+  var pullBtn = $('pullBtn'), applyBtn = $('applyBtn'), jsonBtn = $('jsonBtn'), chartBtn = $('chartBtn');
   var preview = $('preview'), status = $('status'), tabHint = $('tabHint');
-  var current = null;   // {snapshot, mapped}
+
+  var currentResult = null;   // { snapshot, mapped, range }
+  var historyResults = null;  // для режима «6 недель»: [{snapshot, mapped}, ...]
+  var isDirty = false;
 
   periodSel.addEventListener('change', function () {
     dateRow.style.display = periodSel.value === 'custom' ? 'flex' : 'none';
+    weeksRow.style.display = periodSel.value === '6w' ? 'flex' : 'none';
   });
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -40,6 +45,17 @@
     preview.innerHTML = html;
   }
 
+  function renderHistoryPreview(results) {
+    var html = '<div style="font-size:12px;color:#667085;margin-bottom:4px;">Загружено дней: ' + results.length + '</div>';
+    html += '<table class="kv">';
+    results.forEach(function (r) {
+      var s = r.snapshot;
+      html += '<tr><td>' + s.date + '</td><td>' + (s.orders_per_day || '—') + ' заказ | ' + fmtMoney(s.avg_check_rub) + ' ₽ чек</td></tr>';
+    });
+    html += '</table>';
+    preview.innerHTML = html;
+  }
+
   pullBtn.addEventListener('click', function () {
     pullBtn.disabled = true; pullBtn.textContent = '⋯ Загрузка…';
     status.hidden = true;
@@ -48,37 +64,69 @@
     if (p === 'yesterday') opts.date = yesterdayISO();
     else if (p === 'today') opts.date = iso(new Date());
     else if (p === 'custom') { opts.date = dateInput.value.trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) { fail('Дата в формате YYYY-MM-DD'); return; } }
+    else if (p === '6w') { opts.weeks = parseInt(weeksN.value, 10) || 6; }
 
     function fail(msg) { setStatus(msg, false); pullBtn.disabled = false; pullBtn.textContent = '1 · Загрузить данные'; }
 
     chrome.runtime.sendMessage({ type: 'DARKSTORE_PULL', opts: opts }, function (resp) {
       pullBtn.disabled = false; pullBtn.textContent = '1 · Загрузить данные';
       if (chrome.runtime.lastError) return fail(chrome.runtime.lastError.message);
+
+      // Режим «6 недель»
+      if (p === '6w' && resp && resp.result && resp.result.snaps) {
+        historyResults = resp.result.snaps;
+        renderHistoryPreview(historyResults);
+        applyBtn.style.display = 'none';
+        jsonBtn.style.display = 'block';
+        chartBtn.style.display = 'block';
+        setStatus('✓ Загружено ' + historyResults.length + ' дней (6 недель). Скачайте JSON или покажите на графиках.', true);
+        return;
+      }
+
       if (!resp || !resp.ok) return fail((resp && resp.error) || 'пустой ответ');
-      current = resp.result;
-      renderPreview(current);
+      currentResult = resp.result;
+      renderPreview(currentResult);
       applyBtn.style.display = jsonBtn.style.display = 'block';
-      setStatus('Данные загружены (' + current.snapshot.shopno + ', ' + current.snapshot.date + ').', true);
+      chartBtn.style.display = 'none';
+      setStatus('Данные загружены (' + currentResult.snapshot.shopno + ', ' + currentResult.snapshot.date + ').', true);
     });
   });
 
   applyBtn.addEventListener('click', function () {
-    if (!current) return;
-    chrome.runtime.sendMessage({ type: 'DARKSTORE_APPLY_TO_PAGE', patch: current.mapped.patch, notes: current.mapped.notes }, function (resp) {
+    if (!currentResult) return;
+    chrome.runtime.sendMessage({ type: 'DARKSTORE_APPLY_TO_PAGE', patch: currentResult.mapped.patch, notes: currentResult.mapped.notes }, function (resp) {
       if (chrome.runtime.lastError) return setStatus(chrome.runtime.lastError.message, false);
       if (!resp || !resp.ok) return setStatus((resp && resp.error) || 'Ошибка вставки', false);
-      setStatus('Патч применён в форме: ' + JSON.stringify(current.mapped.patch), true);
+      setStatus('Патч применён в форме: ' + JSON.stringify(currentResult.mapped.patch), true);
     });
   });
 
   jsonBtn.addEventListener('click', function () {
-    if (!current) return;
-    var blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json;charset=utf-8' });
+    var data = historyResults || [currentResult];
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     var a = document.createElement('a');
+    var name = historyResults
+      ? 'ds_superset_6weeks_' + shopInput.value.trim() + '.json'
+      : 'ds_superset_' + (currentResult.snapshot.shopno || 'all') + '_' + currentResult.snapshot.date + '.json';
     a.href = URL.createObjectURL(blob);
-    a.download = 'ds_superset_' + (current.snapshot.shopno || 'all') + '_' + current.snapshot.date + '.json';
+    a.download = name;
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+  });
+
+  chartBtn.addEventListener('click', function () {
+    if (!historyResults || historyResults.length === 0) return;
+    // Сохраняем все снапшоты и шлём на darkStoreBB для отрисовки фактов на графиках
+    chrome.runtime.sendMessage({
+      type: 'DARKSTORE_FACTS',
+      patch: historyResults[0].mapped.patch,
+      notes: historyResults.map(function (r) { return r.snapshot.date + ': ' + r.snapshot.orders_per_day + ' заказ'; }).join(', '),
+      snaps: historyResults.map(function (r) { return r.snapshot; })
+    }, function (resp) {
+      if (chrome.runtime.lastError) return setStatus(chrome.runtime.lastError.message, false);
+      if (!resp || !resp.ok) return setStatus((resp && resp.error) || 'Ошибка вставки', false);
+      setStatus('✓ Факты нанесены на графики. Обновите страницу (F5), чтобы увидеть пунктир.', true);
+    });
   });
 
   chrome.runtime.sendMessage({ type: 'DARKSTORE_TABS' }, function (r) {
