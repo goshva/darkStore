@@ -289,19 +289,22 @@
     return {};
   }
 
-  function metricForChart(title, factRows) {
-    // подбираем метрику факта по заголовку графика
-    var t = String(title || '').toLowerCase();
-    if (/опозд/.test(t)) return 'slot';          // прокси: доля вне слота
-    if (/чек|ц/.test(t) && /₽|руб/.test(t)) return 'check';
-    if (/прибыль|вклад|потер/.test(t)) return null; // прибыль/потери фактом не покрываем
-    return 'orders';
+  function metricForChart(title) {
+    // подбор по реальным заголовкам графиков renderCharts():
+    // «Прибыль в день, ₽» | «Из чего состоят потери…» | «Опоздания на заказ, %» |
+    // «Обращения, %» | «Обеспеченность ТМЦ, %» | «Выход по слотам, %» | «Автономность куратора, %»
+    var t = String(title || '');
+    if (/^Опоздания/.test(t)) return 'slot';   // прокси: доля заказов вне слота
+    return null; // прибыль/потери фактом не покрываем; чек и заказы — отдельная панель-таблица
   }
+
+  // дополнительный слой для бар-чарта прибыли: маркеры факта НЕ рисуем (метрика другая),
+  // но панель-таблица compareWithPlan показывает заказы/чек/слот по неделям.
 
   function installFactsHooks() {
     if (!window.__dsHistory || !window.__dsHooks) return;
     window.__dsHooks.factLine = function (X, Y, fmtV, title) {
-      var rows = window.__dsHistory.compareWithPlan(planWeeksFromState());
+      var rows = window.__dsHistory.compareWithPlan(planWeeksFromState(), Object.keys(window.__dsHistory.load().weeks).sort());
       if (!rows.length) return '';
       var key = metricForChart(title, rows);
       if (!key) return '';
@@ -336,7 +339,7 @@
       else document.body.appendChild(el);
     }
     if (!window.__dsHistory) { el.innerHTML = ''; return; }
-    var rows = window.__dsHistory.compareWithPlan(planWeeksFromState());
+    var rows = window.__dsHistory.compareWithPlan(planWeeksFromState(), Object.keys(window.__dsHistory.load().weeks).sort());
     if (!rows.length) { el.innerHTML = '<h2>Факт vs план</h2><div class="hint">Нет фактических данных — загрузите недели через расширение или «Импорт JSON…».</div>'; return; }
     function cell(c, unit) {
       if (c.fact == null) return '<td class="na">нет</td>';

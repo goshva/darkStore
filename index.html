@@ -2054,7 +2054,7 @@
     });
     var legend = parts.map(function (pt) { return '<span><i style="background:' + pt.color + '"></i>' + pt.name + '</span>'; }).join('');
     // слой фактов (пунктиром, поверх слоёв потерь)
-    var factLossSvg = factLayer(X, Y, fmtAxis);
+    var factLossSvg = factLayer(X, Y, fmtAxis, title);
     if (factLossSvg) svg += factLossSvg;
     return chartOpen(title, opts.hint) + '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '">' + svg + chartWeeksLabels(X, H) + '</svg>' +
       '<div class="chart-legend">' + legend + '</div></div>';
