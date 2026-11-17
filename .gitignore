@@ -1,0 +1,9 @@
+# Секреты и кеши авторизации Superset — никогда не коммитить
+local.json
+*.local.json
+_dc.log
+_sc.log
+_au.log
+_ch.log
+snap*.json
+nul
