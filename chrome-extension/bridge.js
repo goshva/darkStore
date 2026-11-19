@@ -259,12 +259,21 @@
         catch (e) { sendResponse({ ok: false, error: e.message }); }
         return;
       }
-      // ── пакетное нанесение фактов на графики ──
+      // ---------- пакетное нанесение фактов на графики ----------
       if (msg.type === 'DARKSTORE_FACTS') {
         try {
           applyPatch(msg.patch, msg.notes);
-          if (window.__dsFacts) window.__dsFacts.add(msg.snaps);
-          if (typeof window.render === 'function') window.render(true);
+          var store = function () {
+            (msg.snaps || []).forEach(function (s) { if (s) window.__dsHistory.addDay(s); });
+            renderFactsPanel();
+            if (typeof window.render === 'function') window.render(true);   // перерисовка с factLine-слоем
+          };
+          if (window.__dsFacts) { window.__dsFacts.add(msg.snaps || []); }
+          else if (window.__dsHistory && typeof SupersetCore !== 'undefined') { store(); }
+          else {
+            sendResponse({ ok: false, error: 'Модуль истории ещё не готов — обновите страницу (F5) и повторите' });
+            return;
+          }
           sendResponse({ ok: true });
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
         return;
@@ -357,16 +366,32 @@
   }
 
   (function initFacts() {
-    if (typeof SupersetCore === 'undefined') return;   // history работает без ядра только если SupersetCore загружен (mondayOf и т.п.)
-    window.__dsFacts = {
-      add: function (snaps) {
-        snaps.forEach(function (s) { if (s) window.__dsHistory.addDay(s); });
-        renderFactsPanel();
-      },
-      clear: function () { try { localStorage.removeItem(window.__dsHistory.KEY); } catch (e) {} renderFactsPanel(); }
-    };
-    installFactsHooks();
-    setTimeout(renderFactsPanel, 300);   // после первого render страницы
+    function ready() {
+      if (typeof SupersetCore === 'undefined') return false;
+      if (!window.__dsHistory) return false;
+      if (window.__dsFactsReady) return true;
+      window.__dsFacts = {
+        add: function (snaps) {
+          snaps.forEach(function (s) { if (s) window.__dsHistory.addDay(s); });
+          renderFactsPanel();
+          // перерисовываем все графики, чтобы factLine появился поверх
+          if (typeof window.render === 'function') window.render(true);
+        },
+        clear: function () { try { localStorage.removeItem(window.__dsHistory.KEY); } catch (e) {} renderFactsPanel(); }
+      };
+      window.__dsFactsReady = true;
+      installFactsHooks();
+      setTimeout(renderFactsPanel, 300);
+      return true;
+    }
+    if (!ready()) {
+      // ждём загрузки superset-core.js (подключается через content_scripts после bridge.js)
+      var check = setInterval(function () {
+        if (ready()) clearInterval(check);
+      }, 500);
+      // таймаут 15 сек
+      setTimeout(function () { clearInterval(check); if (!window.__dsFactsReady) console.warn('[ds] initFacts timeout — SupersetCore не загружен'); }, 15000);
+    }
   })();
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectUI);

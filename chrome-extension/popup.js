@@ -7,10 +7,52 @@
   var weeksN = $('weeksN'), weeksRow = $('weeksRow');
   var pullBtn = $('pullBtn'), applyBtn = $('applyBtn'), jsonBtn = $('jsonBtn'), chartBtn = $('chartBtn');
   var preview = $('preview'), status = $('status'), tabHint = $('tabHint');
+  var progressBox = $('progress'), pbarFill = $('pbarFill'), ptext = $('ptext');
 
   var currentResult = null;   // { snapshot, mapped, range }
   var historyResults = null;  // для режима «6 недель»: [{snapshot, mapped}, ...]
   var isDirty = false;
+
+  /* ---------- прогресс выгрузки ---------- */
+  var progStart = 0, progLastDone = 0, progTimer = null;
+
+  function fmtLeft(sec) {
+    if (sec < 60) return Math.max(1, Math.round(sec)) + ' с';
+    var m = Math.floor(sec / 60), s = Math.round(sec % 60);
+    return m + ' мин' + (s ? ' ' + s + ' с' : '');
+  }
+
+  function showProgress(done, total, date) {
+    if (!total) return;
+    progressBox.hidden = false;
+    var pct = Math.min(100, Math.round(done / total * 100));
+    pbarFill.style.width = pct + '%';
+    var line = 'Загружено ' + done + ' из ' + total + ' дней (' + pct + '%)';
+    if (date) line += '\nсейчас: ' + date;
+    if (done > 0 && progStart) {
+      var perDay = (Date.now() - progStart) / done;
+      line += '\nосталось ~' + fmtLeft((total - done) * perDay / 1000);
+    }
+    ptext.textContent = line;
+    // если сообщения о прогрессе замолчали (вкладка popup жива, background ждёт fetch) — тикаем сами по последней оценке
+    progLastDone = done;
+  }
+
+  function resetProgress() {
+    progStart = Date.now();
+    progressBox.hidden = false;
+    pbarFill.style.width = '0%';
+    ptext.textContent = 'старт… 0%' + (periodSel.value === '6w' ? ' (42 дня)' : '');
+  }
+
+  function hideProgress() {
+    if (progTimer) { clearInterval(progTimer); progTimer = null; }
+    progressBox.hidden = true;
+  }
+
+  chrome.runtime.onMessage.addListener(function (msg) {
+    if (msg && msg.type === 'DARKSTORE_PROGRESS') showProgress(msg.done, msg.total, msg.date);
+  });
 
   periodSel.addEventListener('change', function () {
     dateRow.style.display = periodSel.value === 'custom' ? 'flex' : 'none';
@@ -64,17 +106,19 @@
     if (p === 'yesterday') opts.date = yesterdayISO();
     else if (p === 'today') opts.date = iso(new Date());
     else if (p === 'custom') { opts.date = dateInput.value.trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) { fail('Дата в формате YYYY-MM-DD'); return; } }
-    else if (p === '6w') { opts.weeks = parseInt(weeksN.value, 10) || 6; }
+    else if (p === '6w') { opts.weeks = parseInt(weeksN.value, 10) || 6; resetProgress(); }
 
-    function fail(msg) { setStatus(msg, false); pullBtn.disabled = false; pullBtn.textContent = '1 · Загрузить данные'; }
+    function fail(msg) { setStatus(msg, false); pullBtn.disabled = false; pullBtn.textContent = '1 · Загрузить данные'; hideProgress(); }
 
     chrome.runtime.sendMessage({ type: 'DARKSTORE_PULL', opts: opts }, function (resp) {
       pullBtn.disabled = false; pullBtn.textContent = '1 · Загрузить данные';
+      hideProgress();
       if (chrome.runtime.lastError) return fail(chrome.runtime.lastError.message);
 
       // Режим «6 недель»
       if (p === '6w' && resp && resp.result && resp.result.snaps) {
         historyResults = resp.result.snaps;
+        pbarFill.style.width = '100%';
         renderHistoryPreview(historyResults);
         applyBtn.style.display = 'none';
         jsonBtn.style.display = 'block';

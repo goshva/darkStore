@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DarkStore Superset Bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Тянет фактические данные даркстора из Superset ВкусВилл (авторизация прямо со страницы) и переносит их в darkStoreBB или сохраняет JSON.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
@@ -25,7 +25,7 @@
     },
     {
       "matches": ["https://goshva.github.io/darkStore/*", "file:///*", "http://localhost/*", "http://127.0.0.1/*"],
-      "js": ["bridge.js"],
+      "js": ["superset-core.js", "history.js", "bridge.js"],
       "run_at": "document_idle"
     }
   ]

@@ -11,15 +11,47 @@ function findSupersetTab(cb) {
   chrome.tabs.query({ url: SUPERSET_MATCH }, function (tabs) { cb((tabs || [])[0] || null); });
 }
 
+// Матчинг URL вкладки с паттернами расширения. chrome.tabs.query({url:['file:///*']}) НЕ матчит
+// file:///C:/... (Chrome трактует «file:///*» как host='*'), поэтому file:// и локальные пути
+// проверяем руками по полному URL.
+function isDarkstoreUrl(u) {
+  u = u || '';
+  if (/^https:\/\/goshva\.github\.io\/darkStore\//i.test(u)) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(u)) return true;
+  if (/^file:\/\/\/.*/i.test(u) && /darkstore|index\.html/i.test(u)) return true;
+  return false;
+}
+function pickDarkstoreTab(list) {
+  var best = null;
+  (list || []).forEach(function (t) {
+    var u = t.url || t.pendingUrl || '';
+    if (!isDarkstoreUrl(u)) return;
+    if (/goshva\.github\.io\/darkStore/i.test(u)) { best = t; return; }
+    if (!best) best = t;
+  });
+  return best;
+}
 function findDarkstoreTab(cb) {
+  // 1) обычный query по глобам (ловит http/https и корректные file://-вкладки)
   chrome.tabs.query({ url: DARKSTORE_GLOB }, function (tabs) {
-    var list = tabs || [];
-    var best = null;
-    for (var i = 0; i < list.length; i++) {
-      if (/goshva\.github\.io\/darkStore/i.test(list[i].url || '')) { best = list[i]; break; }
-      if (!best && /darkstore|index\.html/i.test(list[i].url || '')) best = list[i];
-    }
-    cb(best);
+    var best = pickDarkstoreTab(tabs);
+    if (best) { cb(best); return; }
+    // 2) fallback: все вкладки + ручной матчинг (спасает file:///C:/... без «Allow access to file URLs»)
+    chrome.tabs.query({}, function (all) {
+      var found = pickDarkstoreTab(all);
+      if (found && /^file:\/\//i.test(found.url || '')) {
+        // без разрешённого доступа к файлам scripting/sendMessage всё равно упадёт — подскажем как включить
+        chrome.extension.isAllowedFileSchemeAccess(function (allowed) {
+          if (allowed === false) {
+            cb(null, 'Нет доступа к file:// — включите в chrome://extensions у «darkStoreBB · Superset bridge» переключатель «Allow access to file URLs» и обновите страницу графика (F5).');
+            return;
+          }
+          cb(found);
+        });
+        return;
+      }
+      cb(found);
+    });
   });
 }
 
@@ -46,86 +78,45 @@ function pullOneDay(shopno, date, cb) {
   });
 }
 
-// Пакетное извлечение N дней (для режима «6 недель»)
+// Пакетное извлечение N недель (42 дня). Прогресс — сообщениями {type:'DARKSTORE_PROGRESS', done, total, date} в popup.
 function pullWeeks(shopno, numWeeks, cb) {
-  var core = typeof SupersetCore !== 'undefined' ? SupersetCore : null;
-  if (!core) {
-    // fallback: генерируем понедельники через background
-    var ref = new Date();
-    ref.setHours(0, 0, 0, 0);
-    var dow = ref.getDay();
-    var thisMon = new Date(ref);
-    thisMon.setDate(thisMon.getDate() - (dow === 0 ? 6 : dow - 1));
-    var mondays = [];
-    for (var i = 1; i <= numWeeks; i++) mondays.push(new Date(thisMon.getTime() - 7 * 1000 * 60 * 60 * 24 * 7 * i));
-    var dates = [];
-    mondays.forEach(function (mon) {
-      for (var d = 0; d < 7; d++) {
-        var dd = new Date(mon.getTime() + 1000 * 60 * 60 * 24 * d);
-        var dateStr = dd.getFullYear() + '-' + ('0' + (dd.getMonth() + 1)).slice(-2) + '-' + ('0' + dd.getDate()).slice(-2);
-        if (dateStr < (new Date().toISOString().slice(0, 10))) dates.push(dateStr);
-      }
-    });
-    dates.sort(); // от старой к новой
+  function isoLocal(dt) { return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2); }
 
-    var results = [];
-    var idx = 0;
-
-    function pullNext() {
-      if (idx >= dates.length) {
-        cb({ ok: true, result: { snaps: results } });
-        return;
-      }
-      var date = dates[idx++];
-      pullOneDay(shopno, date, function (resp) {
-        if (resp.ok && resp.result) {
-          results.push(resp.result);
-          pullNext();
-        } else {
-          // пропуск пустых дней (например, праздники)
-          pullNext();
-        }
-      });
-    }
-
-    pullNext();
-    return;
-  }
-
-  // Если core доступен (из Superset вкладка), используем его
   var ref = new Date();
   ref.setHours(0, 0, 0, 0);
   var dow = ref.getDay();
-  var thisMon = new Date(ref);
-  thisMon.setDate(thisMon.getDate() - (dow === 0 ? 6 : dow - 1));
-  var mondays = [];
-  for (var i = 1; i <= numWeeks; i++) mondays.push(new Date(thisMon.getTime() - 7 * 1000 * 60 * 60 * 24 * 7 * i));
-  var allDates = [];
-  mondays.forEach(function (mon) {
+  var thisMon = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - (dow === 0 ? 6 : dow - 1));
+  var todayStr = isoLocal(ref);
+  var dates = [];
+  for (var i = 1; i <= numWeeks; i++) {
     for (var d = 0; d < 7; d++) {
-      var dd = new Date(mon.getTime() + 1000 * 60 * 60 * 24 * d);
-      var dateStr = dd.getFullYear() + '-' + ('0' + (dd.getMonth() + 1)).slice(-2) + '-' + ('0' + dd.getDate()).slice(-2);
-      if (dateStr < (new Date().toISOString().slice(0, 10))) allDates.push(dateStr);
+      var dd = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate() - 7 * i + d);
+      var dateStr = isoLocal(dd);
+      if (dateStr < todayStr) dates.push(dateStr);   // без сегодняшнего и будущих
     }
-  });
+  }
+  dates.sort();                                      // от старой к новой
 
   var results = [];
   var idx = 0;
+  var total = dates.length;
+
+  function notify(done, date) {
+    try { chrome.runtime.sendMessage({ type: 'DARKSTORE_PROGRESS', done: done, total: total, date: date }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+  }
+
   function pullNext() {
-    if (idx >= allDates.length) {
-      cb({ ok: true, result: { snaps: results } });
-      return;
-    }
-    var date = allDates[idx++];
+    if (idx >= total) { cb({ ok: true, result: { snaps: results } }); return; }
+    var date = dates[idx];
+    notify(idx, date);
     pullOneDay(shopno, date, function (resp) {
-      if (resp.ok && resp.result) {
-        results.push(resp.result);
-        pullNext();
-      } else {
-        pullNext();
-      }
+      idx++;
+      if (resp.ok && resp.result) results.push(resp.result);   // пустые/праздничные дни просто пропускаем
+      notify(idx, idx < total ? dates[idx] : null);
+      pullNext();
     });
   }
+
   pullNext();
 }
 
@@ -161,17 +152,18 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 
   if (msg.type === 'DARKSTORE_TABS') {
     findSupersetTab(function (ss) {
-      findDarkstoreTab(function (ds) {
+      findDarkstoreTab(function (ds, hint) {
         sendResponse({ superset: ss ? { id: ss.id, url: ss.url, title: ss.title } : null,
-                       darkstore: ds ? { id: ds.id, url: ds.url, title: ds.title } : null });
+                       darkstore: ds ? { id: ds.id, url: ds.url, title: ds.title } : null,
+                       darkstoreHint: ds ? null : (hint || null) });
       });
     });
     return true;
   }
 
   if (msg.type === 'DARKSTORE_APPLY_TO_PAGE') {
-    findDarkstoreTab(function (ds) {
-      if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена.' }); return; }
+    findDarkstoreTab(function (ds, hint) {
+      if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена. ' + (hint || 'Откройте index.html в этой же вкладке Chrome.') }); return; }
       ensureScripts(ds.id, ['history.js', 'bridge.js'], function () {
         sendToTab(ds.id, { type: 'DARKSTORE_APPLY_PATCH', patch: msg.patch, notes: msg.notes }, sendResponse);
       });
@@ -181,8 +173,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 
   // Пакет фактов: складываем дни в историю страницы и наносим на графики
   if (msg.type === 'DARKSTORE_FACTS') {
-    findDarkstoreTab(function (ds) {
-      if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена.' }); return; }
+    findDarkstoreTab(function (ds, hint) {
+      if (!ds) { sendResponse({ ok: false, error: 'Вкладка darkStoreBB (index.html) не найдена. ' + (hint || 'Откройте index.html в этой же вкладке Chrome.') }); return; }
       ensureScripts(ds.id, ['superset-core.js', 'history.js', 'bridge.js'], function (err) {
         if (err) { sendResponse({ ok: false, error: 'Инъекция скриптов: ' + err }); return; }
         sendToTab(ds.id, { type: 'DARKSTORE_FACTS', snaps: msg.snaps || [], patch: msg.patch, notes: msg.notes }, sendResponse);

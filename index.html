@@ -30,7 +30,8 @@
 
   /* ===================== КАРКАС: сайдбар, топбар, сетка ===================== */
   .app { min-height:100vh; }
-  .sidebar { position:fixed; inset:0 auto 0 0; width:var(--sidebar); background:linear-gradient(180deg,var(--nav),#151e1b); color:var(--nav-text); padding:22px 14px 16px; display:flex; flex-direction:column; z-index:20; }
+  .sidebar { position:fixed; inset:0 auto 0 0; width:var(--sidebar); background:linear-gradient(180deg,var(--nav),#151e1b); color:var(--nav-text); padding:22px 14px 16px; display:flex; flex-direction:column; z-index:20; overflow-y:auto; }
+  .sidebar > * { flex:none; }
   .brand { display:flex; align-items:center; gap:12px; padding:0 8px 28px; }
   .brand-mark { width:36px; height:36px; color:#20b45a; flex:none; }
   .brand-name { font-size:19px; font-weight:800; letter-spacing:-.5px; color:#fff; display:block; }
@@ -67,6 +68,7 @@
   .middle-row { grid-template-columns:1.12fr 1fr; }
   .matrix-row { grid-template-columns:1.58fr .92fr; }
   .bottom-row { grid-template-columns:1.15fr 1.16fr 1.05fr; }
+  .wide-row { grid-template-columns:1fr; }
   .section-gap { margin-top:14px; }
   .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); min-width:0; padding:14px 15px; margin:0; }
   .card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:11px; }
@@ -149,6 +151,7 @@
   .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:750; margin-left:6px; }
   .badge.neg { background:var(--red-soft); color:var(--warn); }
   .badge.pos { background:var(--green-soft); color:var(--green-dark); }
+  .badge:empty { display:none; }
 
   /* ===================== ТАРИФЫ ПО ЗИСАМ ===================== */
   #zoneTableWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -170,6 +173,20 @@
   .chart-hint { font-weight:400; color:var(--muted); font-size:12px; }
   .chart-legend { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:4px; }
   .chart-legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+  /* 12-недельная панель «История и прогноз» (факты Superset + план/прогноз модели) */
+  #histCharts svg.chart { min-width:640px; }
+  #histCharts [fill="#0b8a4b"] { fill:var(--green); }
+  #histCharts [stroke="#0b8a4b"] { stroke:var(--green); }
+  #histCharts [fill="#b42318"] { fill:#c9374a; }
+  #histCharts [stroke="#b42318"] { stroke:#c9374a; }
+  #histCharts [fill="#f79009"] { fill:var(--amber); }
+  #histCharts [stroke="#f79009"] { stroke:var(--amber); }
+  #histCharts [fill="#98a2b3"] { fill:#87958d; }
+  #histCharts [stroke="#98a2b3"] { stroke:#87958d; }
+  #histCharts [fill="#c3c8d0"] { fill:var(--line-strong); }
+  #histCharts [fill="#d0d5dd"] { fill:var(--line-strong); }
+  #histCharts [fill="#475467"] { fill:#435149; }
+  #histCharts [fill="#667085"] { fill:var(--muted); }
   .matrix-wrap { overflow-x:auto; }
   table.matrix { border-collapse:collapse; width:100%; min-width:430px; font-size:12px; }
   table.matrix th, table.matrix td { border:1px solid var(--line); padding:6px 7px; text-align:center; }
@@ -215,11 +232,11 @@
   .step-copy strong { display:block; font-size:13px; }
   .step-copy small { display:block; color:var(--muted); font-size:12px; }
   .step-current { border-color:#9bd6ad; background:var(--green-pale); }
-  /* Вложенные карточки бенчмарков и миграции — без двойной рамки */
-  #migrationNotice.card { border:0; box-shadow:none; padding:0; margin:0 0 10px; background:transparent; }
+  /* Вложенные карточки: без двойной рамки; уведомление о миграции сохраняет акцентную полосу */
+  #migrationNotice { margin:0 0 12px; }
   .app-notice { border-left:4px solid var(--amber); background:var(--amber-soft); border-radius:12px; padding:12px 14px; box-shadow:none; }
   .app-notice .card-title { color:#8a6416; }
-  #benchmarkCard { border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-soft); }
+  #benchmarkCard { border:0; box-shadow:none; border-radius:12px; padding:12px; background:var(--surface-soft); }
 
   /* ===================== ЖИВАЯ ЛЕГЕНДА И ПОЛОСА ===================== */
   #ytWrap { position:fixed; top:0; left:0; right:0; height:4px; background:#e6ecef; z-index:9999; }
@@ -393,16 +410,28 @@
         </article>
       </section>
 
-      <section class="grid matrix-row section-gap">
+      <section class="grid wide-row section-gap">
         <article class="card" id="analytics">
-          <div class="card-head"><h2 class="card-title">Прибыли, потери и матрица метрик <span class="info" title="Прибыль — столбцами, метрики — с коридором цели, ниже матрица «метрика × неделя»">i</span></h2></div>
+          <div class="card-head"><h2 class="card-title">Прибыль, потери и матрица метрик <span class="info" title="Прибыль — столбцами, метрики — с коридором цели, ниже матрица «метрика × неделя»">i</span></h2></div>
           <div class="hint">Наведите курсор на точку или столбец, чтобы увидеть значение. Факт прошлых недель отмечается на графиках.</div>
           <div class="chart-wrap" id="charts"></div>
         </article>
+      </section>
+
+      <section class="grid wide-row section-gap">
         <article class="card">
           <div class="card-head"><h2 class="card-title">Отчёт для анализа ИИ</h2></div>
           <div class="hint">Структурированный текст: цель, калибровка, метрики, причины изменения маржи, решения, риски. Кнопка «Отчёт ИИ» в нижней панели копирует его.</div>
           <textarea id="aiReport" readonly></textarea>
+        </article>
+      </section>
+
+      <section class="grid wide-row section-gap">
+        <article class="card" id="historyForecast">
+          <div class="card-head"><h2 class="card-title">История и прогноз · 12 недель <span class="badge" id="histBadge"></span></h2></div>
+          <div class="hint">Слева 6 прошлых недель — факты Superset (сбор через расширение DarkStore Superset Bridge, хранилище darkstore_facts_v1), справа 6 недель плана модели (Н1–Н6). Пунктир — прогноз по тренду фактов (линейная регрессия), он не учитывает плановые действия и может расходиться с моделью. Нет фактов за прошлые недели — графики показывают только план.</div>
+          <div class="chart-wrap" id="histCharts"></div>
+          <div class="matrix-wrap" id="histTableWrap"></div>
         </article>
       </section>
 
@@ -434,9 +463,8 @@
         </article>
 
         <article class="card" id="benchmarks">
-          <div class="card-head"><h2 class="card-title">Бенчмарки рынка</h2></div>
+          <div class="card-head"><h2 class="card-title">Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2></div>
           <div class="card" id="benchmarkCard" style="display:none">
-            <div class="card-head"><h2 class="card-title">Бенчмарки рынка <span class="badge" id="benchmarkBadge"></span></h2></div>
             <div class="hint">Чтобы сравнить даркстор с рынком, укажите рыночные значения и источник с датой. Без источника бенчмарк не принимается: ИИ должен опираться на ваши числа, а не выдумывать их.</div>
             <div id="benchmarkForm"></div>
             <div class="hint" id="benchmarkStatus"></div>
@@ -2114,10 +2142,12 @@
     return svg;
   }
   function chartWeeksLabels(X, H) {
-    var svg = '';
-    for (var i = 0; i < TOTAL_WEEKS; i++) {
-      svg += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" font-size="12" text-anchor="middle" fill="#667085">╨Э' + (i + 1) + '</text>';
-    }
+    // по запросу подписаны только первая и последняя недели — середина без «Н2…Н5»
+    var svg = '', last = TOTAL_WEEKS - 1;
+    [0, last].forEach(function (i) {
+      var fit = labelFit(i, X(i));
+      svg += '<text x="' + fit.x.toFixed(1) + '" y="' + (H - 8) + '" font-size="12" text-anchor="' + fit.anchor + '" fill="#667085">Н' + (i + 1) + '</text>';
+    });
     return svg;
   }
   // ── факт/план: переопределяемые мостом функции (см. chrome-extension/bridge.js → window.__dsChartHooks) ──
@@ -2368,7 +2398,7 @@
       if (d && Object.keys(d).length) filled++;
     }
     if (!filled) {
-      chartsEl.innerHTML = '<div class="hint">Данных пока нет: заполните неделю 1 — графики и матрица статусов построятся автоматически.</div>';
+      chartsEl.innerHTML = '<div class="hint">Нет данных: заполните неделю 1 — графики и модель заполнятся автоматически.</div>';
       return;
     }
     var lateness = seriesFor('lateness', TOTAL_WEEKS);
@@ -2382,11 +2412,11 @@
     function topRound(arr, floor) { return Math.max(floor, Math.ceil((maxOf(arr) * 1.3) / 5) * 5); }
 
     var h = '';
-    h += svgBarChart('Прибыль в день, ₽', profits, { baseline: profits[0], hint: 'зелёный — не хуже недели 1, красный — хуже' });
-    if (numbers(losses.total).length) h += svgStackedChart('Из чего состоят потери, ₽/день', losses, { hint: 'чем ниже столбец, тем лучше' });
-    h += svgLineChart('Опоздания на заказ, %', lateness, { min: 0, max: topRound(lateness, 10), band: [5, 7], target: 6, targetText: 'цель 5–7%', unit: '%', hint: 'точка зелёная — в цели',
+    h += svgBarChart('Прибыль в день, ₽', profits, { baseline: profits[0], hint: 'зелёный = не ниже недели 1, красный — ниже' });
+    if (numbers(losses.total).length) h += svgStackedChart('Из чего состоят потери, ₽/день', losses, { hint: 'чем тоньше столбик, тем лучше' });
+    h += svgLineChart('Опоздания на заказ, %', lateness, { min: 0, max: topRound(lateness, 10), band: [5, 7], target: 6, targetText: 'цель 5–7%', unit: '%', hint: 'точка на цели — в зелёной зоне',
       statusColor: function (v) { return v <= 7 ? '#0b8a4b' : (v <= 10 ? '#f79009' : '#b42318'); } });
-    h += svgLineChart('Обращения, %', appeals, { min: 0, max: topRound(appeals, 10), band: [0, 5], target: 5, targetText: 'цель 0–5%', unit: '%', hint: 'точка зелёная — в цели',
+    h += svgLineChart('Обращения, %', appeals, { min: 0, max: topRound(appeals, 10), band: [0, 5], target: 5, targetText: 'цель 0–5%', unit: '%', hint: 'точка на цели — в зелёной зоне',
       statusColor: function (v) { return v <= 5 ? '#0b8a4b' : (v <= 8 ? '#f79009' : '#175cd3'); } });
     h += svgLineChart('Обеспеченность ТМЦ, %', tmc, { min: 0, max: 100, target: 100, targetText: 'цель 100%', unit: '%',
       statusColor: function (v) { return v >= 100 ? '#0b8a4b' : (v >= 95 ? '#f79009' : '#b42318'); } });
@@ -2396,6 +2426,249 @@
       statusColor: function (v) { return v >= 90 ? '#0b8a4b' : (v >= 80 ? '#f79009' : '#b42318'); } });
     h += statusMatrix(profits);
     chartsEl.innerHTML = h;
+
+    // ---------- 12-недельная панель «История и прогноз» ----------
+    renderHistoryForecast();
+  }
+
+  /* ---------- 12-недельная панель: история (факты Superset) + план (модель) + прогноз ----------
+     Ось X: индексы 0..5 — прошлые 6 недель (недели относительно текущей), 6..11 — плановые Н1–Н6.
+     Факты берём из window.__dsHistory (chrome-extension/history.js, localStorage darkstore_facts_v1);
+     без расширения панель показывает только план. Прогноз следующих недель — линейная регрессия по фактам. */
+  var HIST_WEEKS = TOTAL_WEEKS;                 // 6 плановых недель в модели
+  function fmtDateRu(d) { return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2); }
+  function fmtDate(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  // понедельник недели, содержащей date
+  function mondayOfDate(date) {
+    var d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    var dow = d.getDay();                       // 0=вс … 6=сб
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - (dow === 0 ? 6 : dow - 1));
+  }
+
+  // 12 колонок оси: -6..-1 прошлые (относительно текущего понедельника), затем плановые Н1..Н6.
+  // Сдвиг: неделя Н1 идёт сразу за последней исторической, «пустых» колонок нет.
+  function histAxis(thisMon) {
+    var planStart = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate() + 7);
+    var cols = [], i;
+    for (i = 1; i <= HIST_WEEKS; i++) {
+      var m = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate() - 7 * i);
+      cols.push({ kind: 'history', label: fmtDateRu(m), monday: m });
+    }
+    for (i = 0; i < HIST_WEEKS; i++) {
+      var p = new Date(planStart.getFullYear(), planStart.getMonth(), planStart.getDate() + 7 * i);
+      cols.push({ kind: 'plan', label: 'Н' + (i + 1), week: i + 1, monday: p });
+    }
+    return cols;
+  }
+
+  // map понедельник -> недельный агрегат __dsHistory (ключи могут быть строкой или объектом Date)
+  function factsByMonday(h) {
+    var map = {};
+    Object.keys(h.weeks || {}).forEach(function (k) {
+      var w = h.weeks[k], mon = w && w.monday || k;
+      map[String(mon)] = w;
+    });
+    return map;
+  }
+
+  // прибыль как факт по формуле модели, но с метриками из факта Superset
+  function factProfit(fact, cal) {
+    if (!fact) return null;
+    var Q = fact.orders_per_day, price = fact.avg_check_rub;
+    if (!(Q > 0) || !(price > 0)) return null;
+    var M = price * cal.marginPct / 100;
+    var contribution = M - cal.courierCost;
+    var baseLoss = Q * contribution * (cal.kL / 100 * (fact.share_not_in_slot_pct || 0) / 100);
+    return Math.round(Q * contribution - baseLoss);
+  }
+
+  // линейная регрессия y ~ a + b*x по массиву пар [x,y]; прогноз на xList
+  function linReg(points, xList) {
+    var n = points.length;
+    if (n < 2) return null;
+    var sx = 0, sy = 0, sxy = 0, sxx = 0;
+    points.forEach(function (p) { sx += p[0]; sy += p[1]; sxy += p[0] * p[1]; sxx += p[0] * p[0]; });
+    var den = n * sxx - sx * sx;
+    if (!den) return null;
+    var b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n;
+    var out = [];
+    for (var i = 0; i < xList.length; i++) out.push(a + b * xList[i]);
+    return out;
+  }
+
+  function svgHistLine(title, hint, cols, series, opts) {
+    var W = CHART_W, H = CHART_H, left = CHART_PL, right = W - 10, top = CHART_TOP, bottom = H - CHART_PB;
+    var stepX = (right - left) / (cols.length - 1);
+    var all = series.hist.concat(series.plan);
+    if (opts.forecast) all = all.concat(opts.forecast);
+    var nums = numbers(all);
+    if (!nums.length) return '';
+    var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+    if (lo === hi) { var d = Math.abs(lo) || 1; lo -= d * 0.5; hi += d * 0.5; }
+    var pad = (hi - lo) * 0.18; lo -= pad; hi += pad;
+    function X(i) { return left + i * stepX; }
+    function Y(v) { return bottom - ((v - lo) / (hi - lo)) * (bottom - top); }
+    var svg = chartGrid(Y, left, right, lo, hi - lo);
+
+    // цель/полоса
+    if (opts.band) {
+      var by1 = Y(opts.band[1]), by2 = Y(opts.band[0]);
+      svg += '<rect x="' + left + '" y="' + Math.min(by1, by2).toFixed(1) + '" width="' + (right - left) + '" height="' + Math.max(1, Math.abs(by2 - by1)).toFixed(1) + '" fill="#0b8a4b" opacity="0.08"/>';
+    }
+    if (opts.target != null) {
+      var ty = Y(opts.target);
+      svg += '<line x1="' + left + '" y1="' + ty.toFixed(1) + '" x2="' + right + '" y2="' + ty.toFixed(1) + '" stroke="#0b8a4b" stroke-dasharray="4 4"/>';
+      svg += '<text x="' + right + '" y="' + labelY(ty - 4).toFixed(1) + '" font-size="12" text-anchor="end" fill="#0b8a4b">' + esc(opts.targetText || ('цель ' + fmt1(opts.target))) + '</text>';
+    }
+
+    // divider: граница истории и плана
+    var divX = X(HIST_WEEKS - 0.5);
+    svg += '<line x1="' + divX.toFixed(1) + '" y1="' + top + '" x2="' + divX.toFixed(1) + '" y2="' + bottom + '" stroke="#98a2b3" stroke-dasharray="3 3"/>';
+    svg += '<text x="' + (left + 2) + '" y="' + (top + 10) + '" font-size="12" fill="#98a2b3">история (факт)</text>';
+    svg += '<text x="' + (right - 2) + '" y="' + (top + 10) + '" font-size="12" text-anchor="end" fill="#98a2b3">план ┬╖ прогноз</text>';
+
+    // линия фактов истории (сплошная)
+    var seg = [], segs = [];
+    series.hist.forEach(function (v, i) {
+      if (v == null) { if (seg.length) { segs.push(seg); seg = []; } return; }
+      seg.push({ x: X(i), y: Y(v), v: v, i: i });
+    });
+    if (seg.length) segs.push(seg);
+    segs.forEach(function (s) {
+      if (s.length >= 2) svg += '<path d="' + s.map(function (p, k) { return (k === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '" fill="none" stroke="' + (opts.color || '#175cd3') + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    });
+    series.hist.forEach(function (v, i) {
+      if (v == null) return;
+      svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="4" fill="' + (opts.color || '#175cd3') + '" stroke="#fff" stroke-width="1.5">' +
+        '<title>' + esc(cols[i].label) + ' факт: ' + fmt1(v) + (opts.unit || '') + '</title></circle>';
+    });
+
+    // линия плана (сплошная зелёная) + точки со статусным цветом
+    var pseg = [], psegs = [];
+    series.plan.forEach(function (v, idx) {
+      var i = HIST_WEEKS + idx;
+      if (v == null) { if (pseg.length) { psegs.push(pseg); pseg = []; } return; }
+      pseg.push({ x: X(i), y: Y(v) });
+    });
+    if (pseg.length) psegs.push(pseg);
+    psegs.forEach(function (s) {
+      if (s.length >= 2) svg += '<path d="' + s.map(function (p, k) { return (k === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '" fill="none" stroke="#0b8a4b" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    });
+    series.plan.forEach(function (v, idx) {
+      var i = HIST_WEEKS + idx;
+      if (v == null) {
+        svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + bottom + '" r="2" fill="#d0d5dd"><title>' + esc(cols[i].label) + ': нет данных</title></circle>';
+        return;
+      }
+      var c = opts.statusColor ? opts.statusColor(v) : '#0b8a4b';
+      var fit = labelFit(idx, X(i));
+      svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="4" fill="' + c + '" stroke="#fff" stroke-width="1.5">' +
+        '<title>' + esc(cols[i].label) + ' план: ' + fmt1(v) + (opts.unit || '') + '</title></circle>';
+      svg += '<text x="' + fit.x.toFixed(1) + '" y="' + labelY(Y(v) - 9).toFixed(1) + '" font-size="12" text-anchor="' + fit.anchor + '" fill="#475467">' + fmt1(v) + '</text>';
+    });
+
+    // прогноз за пределами фактов (пунктир)
+    if (opts.forecast) {
+      var fpts = [];
+      opts.forecast.forEach(function (v, idx) {
+        if (v == null) return;
+        fpts.push({ x: X(HIST_WEEKS + idx), y: Y(v), v: v });
+      });
+      // соединяем от последней известной точки истории/плана
+      var lastKnown = null;
+      for (var li = HIST_WEEKS - 1; li >= 0 && lastKnown == null; li--) if (series.hist[li] != null) lastKnown = { x: X(li), y: Y(series.hist[li]) };
+      if (fpts.length >= 2 || (fpts.length === 1 && lastKnown)) {
+        var pts = (lastKnown ? [lastKnown] : []).concat(fpts);
+        svg += '<path d="' + pts.map(function (p, k) { return (k === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '" fill="none" stroke="#f79009" stroke-width="2" stroke-dasharray="5 4"/>';
+      }
+      fpts.forEach(function (p, idx) {
+        svg += '<rect x="' + (p.x - 3).toFixed(1) + '" y="' + (p.y - 3).toFixed(1) + '" width="6" height="6" fill="#f79009"><title>прогноз: ' + fmt1(p.v) + (opts.unit || '') + '</title></rect>';
+      });
+    }
+
+    // подписи X (12 колонок): даты истории ┬╖ Н1 и Н6, середина плана без «Н2тАжН5»
+    var labels = '';
+    cols.forEach(function (c, i) {
+      if (c.kind === 'history' && i % 2 === 1) return;
+      if (c.kind === 'plan' && c.week !== 1 && c.week !== HIST_WEEKS) return;
+      labels += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" font-size="12" text-anchor="middle" fill="#667085">' + esc(c.label) + '</text>';
+    });
+    return chartOpen(title, hint) + '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '">' + svg + labels + '</svg></div>';
+  }
+
+  function renderHistoryForecast() {
+    var el = document.getElementById('histCharts');
+    var tableEl = document.getElementById('histTableWrap');
+    var badgeEl = document.getElementById('histBadge');
+    if (!el || !tableEl) return;
+
+    var thisMon = mondayOfDate(new Date());
+    var cols = histAxis(thisMon);
+    var histMondays = cols.slice(0, HIST_WEEKS).map(function (c) { return fmtDate(c.monday); });
+
+    // факты Superset, если расширение подключено
+    var fmap = {}, anyFact = false;
+    try {
+      if (window.__dsHistory) {
+        fmap = factsByMonday(window.__dsHistory.load());
+        histMondays.forEach(function (m) { if (fmap[m]) anyFact = true; });
+      }
+    } catch (e) { /* без расширения тихо работаем по плану */ }
+    if (badgeEl) badgeEl.textContent = anyFact ? '' : 'нет фактов';
+
+    var cal = calibration();
+    function factOf(m, key) { var w = fmap[m]; return w && w[key] != null ? w[key] : null; }
+
+    var histProfit = [], histSlot = [], factOrders = [];
+    histMondays.forEach(function (m) {
+      var f = fmap[m];
+      histProfit.push(f ? factProfit(f, cal) : null);
+      histSlot.push(factOf(m, 'share_not_in_slot_pct'));
+      factOrders.push(factOf(m, 'orders_per_day'));
+    });
+    var planProfit = profitSeries(HIST_WEEKS);
+    var planSlot = seriesFor('lateness', HIST_WEEKS);
+
+    // прогнозы по тренду фактов (линейная регрессия), если есть >=2 точек
+    var fxIdx = [], fxPts = [];
+    for (var i = 0; i < HIST_WEEKS; i++) {
+      if (histProfit[i] != null) { fxPts.push([i, histProfit[i]]); }
+      if (histSlot[i] != null) fxIdx.push(i);
+    }
+    var forecastProfit = null, forecastSlot = null;
+    if (fxPts.length >= 2) forecastProfit = linReg(fxPts, planProfit.map(function (_, k) { return HIST_WEEKS + k; }));
+    var slotPts = [];
+    for (var j = 0; j < HIST_WEEKS; j++) if (histSlot[j] != null) slotPts.push([j, histSlot[j]]);
+    if (slotPts.length >= 2) forecastSlot = linReg(slotPts, planSlot.map(function (_, k) { return HIST_WEEKS + k; }));
+
+    var h = '';
+    h += svgHistLine('Прибыль в день: факт (синий) ┬╖ план (зелёный) ┬╖ прогноз тренда (оранжевый)',
+      'без учёта потерь обращений/ТМЦ/выходов и штрафов куратора', cols, { hist: histProfit, plan: planProfit },
+      { color: '#175cd3', unit: ' тВ╜', statusColor: function (v) { var base = planProfit[0]; return (base == null || v >= base) ? '#0b8a4b' : '#b42318'; }, forecast: forecastProfit });
+    h += svgHistLine('Заказы вне слота, %: факт ┬╖ план', 'то же поле, что «Опоздания на заказ» в модели', cols, { hist: histSlot, plan: planSlot },
+      { unit: '%', band: [5, 7], target: 6, targetText: 'цель 5тАУ7%', statusColor: function (v) { return v <= 7 ? '#0b8a4b' : (v <= 10 ? '#f79009' : '#b42318'); }, forecast: forecastSlot });
+    if (!anyFact) {
+      h = '<div class="hint">Фактов Superset за прошлые 6 недель нет ┬╖ подключите расширение DarkStore Superset Bridge и соберите недели ┬╖ тогда слева появятся исторические линии и прогноз тренда. Сейчас ┬╖ только план модели.</div>' +
+        svgHistLine('План по неделям: прибыль и заказы вне слота', '', cols, { hist: [], plan: planProfit }, {});
+    }
+    el.innerHTML = h;
+
+    // таблица факт vs план (заказы ┬╖ чек ┬╖ слот)
+    var rows = '';
+    histMondays.forEach(function (m, idx) {
+      var f = fmap[m];
+      if (!f) return;
+      rows += '<tr><td>' + fmtDateRu(new Date(m + 'T00:00:00')) + '</td>' +
+        '<td>' + (f.orders_per_day != null ? f.orders_per_day.toLocaleString('ru-RU') : 'тАФ') + '</td>' +
+        '<td>' + (f.avg_check_rub != null ? rub(f.avg_check_rub) : 'тАФ') + '</td>' +
+        '<td>' + (f.share_not_in_slot_pct != null ? fmt1(f.share_not_in_slot_pct) + '%' : 'тАФ') + '</td>' +
+        '<td>' + (histProfit[idx] != null ? rub(histProfit[idx]) : 'тАФ') + '</td>' +
+        '<td>' + (f.days >= 7 ? 'полная' : f.days + '/7 дней') + '</td></tr>';
+    });
+    tableEl.innerHTML = rows
+      ? '<table class="matrix"><thead><tr><th class="m-name">Неделя (пн)</th><th>Заказов/день</th><th>Средний чек</th><th>Вне слота, %</th><th>Прибыль (по модели)</th><th>Полнота</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '';
   }
 
   // ---------- сводка ----------
@@ -4171,6 +4444,7 @@
     render(true);
     return { applied: patch, via: 'state' };
   };
+  window.render = render;   // для перерисовки графиков из расширения (мост Superset)
 })();
 </script>
 <script>
